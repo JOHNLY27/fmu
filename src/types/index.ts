@@ -2,6 +2,8 @@ export interface RiderRequirements {
   licenseNumber: string;
   vehiclePlateNumber: string;
   vehicleModel: string;
+  licenseImage?: string;
+  plateImage?: string;
 }
 
 export interface UserLocation {

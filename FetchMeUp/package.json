@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "fetchmeup": "file:..",
+    "react-native-web": "^0.21.0"
+  }
+}

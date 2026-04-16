@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,158 +6,165 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Animated,
+  Dimensions,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { subscribeToRiderJobs, Order } from '../services/orderService';
-import { useState, useEffect } from 'react';
+import { subscribeToRiderJobs } from '../services/orderService';
+
+const { width } = Dimensions.get('window');
 
 export default function RiderProfileScreen({ navigation }: any) {
   const { user, signOut } = useAuth();
   const [completedCount, setCompletedCount] = useState(0);
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
     if (!user?.uid) return;
     const unsub = subscribeToRiderJobs(user.uid, (data) => {
       setCompletedCount(data.filter(j => j.status === 'completed').length);
     });
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
+    ]).start();
+
     return () => unsub();
   }, [user]);
 
   const handleLogout = async () => {
     try {
       await signOut();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Landing' }],
-      });
     } catch (error) {
-      console.log('Error logging out: ', error);
+       console.log('Error logging out: ', error);
     }
   };
+
+  const menuItems = [
+    { title: 'Personal Information', icon: 'person-outline', sub: 'Name, email, and phone' },
+    { title: 'Vehicle Management', icon: 'bicycle-outline', sub: 'Documents and registration' },
+    { title: 'Payout Settings', icon: 'wallet-outline', sub: 'Bank accounts and billing' },
+    { title: 'Security & Access', icon: 'shield-checkmark-outline', sub: 'Password and 2FA' },
+    { title: 'App Preferences', icon: 'settings-outline', sub: 'Language, notifications' },
+  ];
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <View>
-            <Text style={styles.profileLabel}>PREMIUM COURIER</Text>
-            <Text style={styles.profileName}>{user?.name || 'Rider'}</Text>
-            <Text style={styles.profileSince}>Partner in {user?.location?.city || 'Butuan City'}</Text>
-          </View>
-          <View style={styles.profileStats}>
-            <View style={[styles.statBox, { backgroundColor: COLORS.surfaceHighest }]}>
-              <Text style={styles.statBoxValue}>4.9</Text>
-              <Ionicons name="star" size={12} color={COLORS.primary} />
-            </View>
-            <View style={[styles.statBox, { backgroundColor: COLORS.surfaceLow }]}>
-              <Text style={styles.statBoxValue}>{completedCount}</Text>
-              <Text style={styles.statBoxLabel}>DELIVERIES</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Performance */}
-        <View style={styles.perfRow}>
-          <View style={styles.perfCard}>
-            <Text style={styles.perfTitle}>Performance Stats</Text>
-            <View style={styles.perfGrid}>
-              <View>
-                <Text style={styles.perfLabel}>Acceptance</Text>
-                <Text style={styles.perfValue}>98.2%</Text>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        bounces={false}
+      >
+        {/* Profile Hero Header */}
+        <View style={styles.heroSection}>
+           <Image 
+            source={{ uri: 'https://images.unsplash.com/photo-1485291571150-772bcfc10da5?w=800&fit=crop' }} 
+            style={styles.coverImage} 
+           />
+           <LinearGradient
+            colors={['transparent', 'rgba(15,20,25,0.8)', '#0f1419']}
+            style={styles.coverOverlay}
+           />
+           
+           <View style={styles.heroContent}>
+              <View style={styles.avatarContainer}>
+                 <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'R'}</Text>
+                 </View>
+                 <View style={styles.verifyBadge}>
+                    <Ionicons name="shield-checkmark" size={14} color={COLORS.white} />
+                 </View>
               </View>
-              <View>
-                <Text style={styles.perfLabel}>On-Time</Text>
-                <Text style={styles.perfValue}>94.5%</Text>
+
+              <Text style={styles.userName}>{user?.name || 'Professional Rider'}</Text>
+              <View style={styles.idRow}>
+                 <Text style={styles.userId}>UID: {user?.uid?.substring(0, 10).toUpperCase()}</Text>
+                 <View style={styles.dot} />
+                 <Text style={styles.userTier}>PLATINUM TIER</Text>
               </View>
-            </View>
-          </View>
-          <View style={styles.tierCard}>
-            <Ionicons name="ribbon" size={28} color={COLORS.primary} />
-            <Text style={styles.tierTitle}>Platinum</Text>
-            <Text style={styles.tierDesc}>Top 3% regional</Text>
-          </View>
+           </View>
         </View>
 
-        {/* Vehicle */}
-        <Text style={styles.sectionTitle}>Vehicle Information</Text>
-        <View style={styles.vehicleCard}>
-          <View style={styles.vehicleIcon}>
-            <Ionicons name="bicycle" size={28} color={COLORS.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.vehicleName}>{user?.requirements?.vehicleModel || 'Electric Scooter'}</Text>
-            <Text style={styles.vehicleType}>Active Vehicle</Text>
-          </View>
-        </View>
-        <View style={styles.vehicleDetails}>
-          <View style={styles.vehicleRow}>
-            <Text style={styles.vehicleLabel}>License Plate</Text>
-            <Text style={styles.vehicleValue}>{user?.requirements?.vehiclePlateNumber?.toUpperCase() || 'PND-123'}</Text>
-          </View>
-          <View style={styles.vehicleRow}>
-            <Text style={styles.vehicleLabel}>Status</Text>
-            <Text style={[styles.vehicleValue, { color: COLORS.tertiary }]}>Approved</Text>
-          </View>
-        </View>
-
-        {/* Documents */}
-        <Text style={styles.sectionTitle}>Documents & Verification</Text>
-        {[
-          { icon: 'shield-checkmark', label: "Background Check", status: 'verified' },
-          { icon: 'document-text', label: "Driver's License", status: 'expires' },
-          { icon: 'heart', label: "Health Insurance", status: 'arrow' },
-        ].map((doc, i) => (
-          <TouchableOpacity key={i} style={styles.docItem}>
-            <Ionicons name={doc.icon as any} size={20} color={COLORS.secondary} />
-            <Text style={styles.docLabel}>{doc.label}</Text>
-            <View style={{ flex: 1 }} />
-            {doc.status === 'verified' && (
-              <Ionicons name="shield-checkmark" size={16} color={COLORS.tertiary} />
-            )}
-            {doc.status === 'expires' && (
-              <View style={styles.expiresBadge}>
-                <Text style={styles.expiresText}>EXPIRES 2026</Text>
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], marginTop: -32 }}>
+           {/* Stats Ribbon */}
+           <View style={styles.statsRibbon}>
+              <View style={styles.statItem}>
+                 <Text style={styles.statValue}>{completedCount}</Text>
+                 <Text style={styles.statLabel}>MISSIONS</Text>
               </View>
-            )}
-            {doc.status === 'arrow' && (
-              <Ionicons name="chevron-forward" size={16} color={COLORS.outlineVariant} />
-            )}
-          </TouchableOpacity>
-        ))}
-
-        {/* Settings */}
-        <Text style={styles.sectionTitle}>App Settings</Text>
-        <View style={styles.settingsCard}>
-          {[
-            { icon: 'notifications', label: 'Notification Preferences', sub: 'Sound, vibration, push' },
-            { icon: 'map', label: 'Navigation Tools', sub: 'Google Maps or Waze' },
-            { icon: 'shield', label: 'Privacy & Security', sub: '2FA and data control' },
-          ].map((s, i) => (
-            <TouchableOpacity 
-              key={i} 
-              style={styles.settingItem}
-              onPress={() => navigation.navigate('GenericContent', { title: s.label })}
-            >
-              <Ionicons name={s.icon as any} size={22} color={COLORS.onSurfaceVariant} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.settingLabel}>{s.label}</Text>
-                <Text style={styles.settingSub}>{s.sub}</Text>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                 <Text style={styles.statValue}>4.9</Text>
+                 <Text style={styles.statLabel}>RATING</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={COLORS.outlineVariant} />
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity 
-            style={[styles.settingItem, { borderBottomWidth: 0 }]}
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out" size={22} color={COLORS.error} />
-            <Text style={[styles.settingLabel, { color: COLORS.error }]}>Log Out</Text>
-          </TouchableOpacity>
-        </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                 <Text style={styles.statValue}>1.4y</Text>
+                 <Text style={styles.statLabel}>TENURE</Text>
+              </View>
+           </View>
+
+           {/* Content Sections */}
+           <View style={styles.mainContent}>
+              
+              <View style={styles.sectionHeader}>
+                 <Text style={styles.sectionTitle}>OPERATIVE SETTINGS</Text>
+              </View>
+
+              <View style={styles.menuCard}>
+                 {menuItems.map((item, idx) => (
+                    <TouchableOpacity 
+                      key={idx} 
+                      style={[styles.menuItem, idx === menuItems.length - 1 && styles.lastMenuItem]}
+                      onPress={() => navigation.navigate('GenericContent', { title: item.title })}
+                    >
+                       <View style={styles.menuIconBox}>
+                          <Ionicons name={item.icon as any} size={20} color={COLORS.onSurface} />
+                       </View>
+                       <View style={styles.menuTextInfo}>
+                          <Text style={styles.menuItemTitle}>{item.title}</Text>
+                          <Text style={styles.menuItemSub}>{item.sub}</Text>
+                       </View>
+                       <Ionicons name="chevron-forward" size={18} color="rgba(0,0,0,0.15)" />
+                    </TouchableOpacity>
+                 ))}
+              </View>
+
+              <View style={styles.sectionHeader}>
+                 <Text style={styles.sectionTitle}>SERVICE COMPLIANCE</Text>
+              </View>
+
+              <TouchableOpacity style={styles.complianceCard}>
+                 <View style={styles.complianceHeader}>
+                    <Ionicons name="document-lock-outline" size={24} color={COLORS.primary} />
+                    <View>
+                       <Text style={styles.complianceTitle}>Verification Center</Text>
+                       <Text style={styles.complianceSub}>3 documents require annual update</Text>
+                    </View>
+                 </View>
+                 <View style={styles.progressTrack}>
+                    <View style={styles.progressFill} />
+                 </View>
+                 <Text style={styles.progressText}>85% Profile Strength</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                 <Text style={styles.logoutText}>TERMINATE SESSION</Text>
+                 <Ionicons name="log-out-outline" size={18} color={COLORS.error} />
+              </TouchableOpacity>
+
+              <Text style={styles.versionText}>V 4.2.0 (STABLE) • VELOCITY LOGISTICS</Text>
+           </View>
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -166,213 +173,243 @@ export default function RiderProfileScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#0f1419',
   },
   scrollContent: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: 16,
-    paddingBottom: 100,
+    flexGrow: 1,
+    backgroundColor: '#F8F9FA',
   },
-  profileHeader: {
-    marginBottom: SPACING.xxl,
+  heroSection: {
+    height: 320,
+    width: '100%',
+    justifyContent: 'flex-end',
+    paddingBottom: 48,
   },
-  profileLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 2,
-    color: COLORS.primary,
-    marginBottom: 4,
+  coverImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
-  profileName: {
-    fontSize: 38,
-    fontWeight: '800',
-    letterSpacing: -1,
-    color: COLORS.onSurface,
+  coverOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
-  profileSince: {
-    fontSize: 13,
-    color: COLORS.onSurfaceVariant,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  profileStats: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginTop: SPACING.lg,
-  },
-  statBox: {
-    padding: SPACING.lg,
-    borderRadius: RADIUS.lg,
+  heroContent: {
     alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 80,
-  },
-  statBoxValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  statBoxLabel: {
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: `${COLORS.onSurface}80`,
-    marginTop: 2,
-  },
-  perfRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.xxl,
-  },
-  perfCard: {
-    flex: 2,
-    backgroundColor: COLORS.secondary,
-    padding: SPACING.xl,
-    borderRadius: RADIUS.lg,
-  },
-  perfTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.white,
-    marginBottom: SPACING.lg,
-  },
-  perfGrid: {
-    flexDirection: 'row',
-    gap: SPACING.xxl,
-  },
-  perfLabel: {
-    fontSize: 12,
-    color: `${COLORS.white}AA`,
-    letterSpacing: -0.3,
-    marginBottom: 2,
-  },
-  perfValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.white,
-  },
-  tierCard: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceHighest,
-    padding: SPACING.xl,
-    borderRadius: RADIUS.lg,
-    justifyContent: 'space-between',
-  },
-  tierTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  tierDesc: {
-    fontSize: 11,
-    color: COLORS.onSurfaceVariant,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-    letterSpacing: -0.3,
-    marginBottom: SPACING.md,
-    marginTop: SPACING.md,
-  },
-  vehicleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.lg,
-    backgroundColor: COLORS.surfaceLow,
-    padding: SPACING.xl,
-    borderRadius: RADIUS.lg,
-    marginBottom: 2,
-    ...SHADOWS.sm,
-  },
-  vehicleIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.surfaceHighest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  vehicleName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  vehicleType: {
-    fontSize: 13,
-    color: COLORS.onSurfaceVariant,
-  },
-  vehicleDetails: {
-    backgroundColor: COLORS.surfaceLow,
-    padding: SPACING.xl,
-    borderRadius: RADIUS.lg,
-    marginBottom: SPACING.lg,
     gap: 8,
-    ...SHADOWS.sm,
   },
-  vehicleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 8,
   },
-  vehicleLabel: {
-    fontSize: 13,
-    color: `${COLORS.onSurface}80`,
+  avatar: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: COLORS.primary,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  vehicleValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.onSurface,
+  avatarText: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: COLORS.white,
   },
-  docItem: {
+  verifyBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.tertiary,
+    borderWidth: 3,
+    borderColor: '#0f1419',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: COLORS.white,
+    letterSpacing: -0.5,
+  },
+  idRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: COLORS.surfaceLow,
-    padding: SPACING.lg,
-    borderRadius: RADIUS.lg,
-    marginBottom: SPACING.sm,
+    gap: 8,
+    opacity: 0.6,
   },
-  docLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.onSurface,
+  userId: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.white,
+    letterSpacing: 1,
+    fontFamily: 'monospace',
   },
-  expiresBadge: {
-    backgroundColor: COLORS.surfaceHighest,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+  dot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: COLORS.white,
   },
-  expiresText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: COLORS.onSurfaceVariant,
+  userTier: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORS.primaryLight,
     letterSpacing: 1,
   },
-  settingsCard: {
-    backgroundColor: COLORS.surfaceLowest,
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
-    ...SHADOWS.sm,
-    marginBottom: SPACING.xxl,
-  },
-  settingItem: {
+  statsRibbon: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.surfaceLow,
+    backgroundColor: COLORS.white,
+    marginHorizontal: 24,
+    borderRadius: 24,
+    padding: 20,
+    ...SHADOWS.md,
   },
-  settingLabel: {
-    fontSize: 14,
-    fontWeight: '700',
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '900',
     color: COLORS.onSurface,
   },
-  settingSub: {
+  statLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.35)',
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+  statDivider: {
+    width: 1,
+    height: '60%',
+    alignSelf: 'center',
+    backgroundColor: '#F1F3F5',
+  },
+  mainContent: {
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 60,
+  },
+  sectionHeader: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
     fontSize: 11,
-    color: COLORS.onSurfaceVariant,
-    marginTop: 1,
+    fontWeight: '900',
+    letterSpacing: 2,
+    color: 'rgba(0,0,0,0.3)',
+  },
+  menuCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 28,
+    marginBottom: 32,
+    ...SHADOWS.sm,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8F9FA',
+  },
+  lastMenuItem: {
+    borderBottomWidth: 0,
+  },
+  menuIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  menuTextInfo: {
+    flex: 1,
+  },
+  menuItemTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.onSurface,
+  },
+  menuItemSub: {
+    fontSize: 11,
+    color: 'rgba(0,0,0,0.4)',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  complianceCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 28,
+    padding: 24,
+    marginBottom: 32,
+    ...SHADOWS.sm,
+  },
+  complianceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 20,
+  },
+  complianceTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.onSurface,
+  },
+  complianceSub: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: '#F1F3F5',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  progressFill: {
+    width: '85%',
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.4)',
+    textAlign: 'center',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 18,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#F1F3F5',
+    marginBottom: 24,
+  },
+  logoutText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.error,
+    letterSpacing: 2,
+  },
+  versionText: {
+    textAlign: 'center',
+    fontSize: 9,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.2)',
+    letterSpacing: 1,
   },
 });

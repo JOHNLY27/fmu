@@ -19,7 +19,7 @@ export const RESTAURANTS: Restaurant[] = [
     rating: 4.5,
     deliveryTime: '30-45 min',
     deliveryFee: '$1.99 Delivery',
-    image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&h=300&fit=crop',
+    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&h=400&fit=crop',
   },
   {
     id: '3',
@@ -58,7 +58,7 @@ export const RESTAURANTS: Restaurant[] = [
     rating: 4.9,
     deliveryTime: '35-50 min',
     deliveryFee: '$0.99 Delivery',
-    image: 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400&h=300&fit=crop',
+    image: 'https://images.unsplash.com/photo-1512058560366-cd2427ffaa32?w=500&h=400&fit=crop',
     isStaffPick: true
   }
 ];

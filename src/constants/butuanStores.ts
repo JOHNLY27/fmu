@@ -38,7 +38,7 @@ export const BUTUAN_STORES: Store[] = [
     category: 'Restaurant',
     address: 'A.D. Curato St, Butuan City',
     barangay: 'Doongan',
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=300&fit=crop',
+    image: 'https://images.unsplash.com/photo-1626082896492-766af4eb6501?w=500', // Fried Chicken (Jollibee vibe)
     rating: 4.5,
     isOpen: true,
     openHours: '7:00 AM - 11:00 PM',
@@ -66,7 +66,7 @@ export const BUTUAN_STORES: Store[] = [
     category: 'Restaurant',
     address: 'Robinsons Place, Butuan City',
     barangay: 'Limaha',
-    image: 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400&h=300&fit=crop',
+    image: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?w=500', // Chinese/Asian (Chowking vibe)
     rating: 4.3,
     isOpen: true,
     openHours: '10:00 AM - 9:00 PM',
@@ -80,7 +80,7 @@ export const BUTUAN_STORES: Store[] = [
     category: 'Restaurant',
     address: 'J.C. Aquino Ave, Butuan City',
     barangay: 'Libertad',
-    image: 'https://images.unsplash.com/photo-1532636875-6faeb12148c4?w=400&h=300&fit=crop',
+    image: 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=500', // Grilled Chicken (Mang Inasal vibe)
     rating: 4.4,
     isOpen: true,
     openHours: '9:00 AM - 10:00 PM',
@@ -94,7 +94,7 @@ export const BUTUAN_STORES: Store[] = [
     category: 'Restaurant',
     address: 'Montilla Blvd, Butuan City',
     barangay: 'Baan KM 3',
-    image: 'https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=400&h=300&fit=crop',
+    image: 'https://images.unsplash.com/photo-1532636875-6faeb12148c4?w=500', // BBQ (Penong's vibe)
     rating: 4.7,
     isOpen: true,
     openHours: '10:00 AM - 10:00 PM',
@@ -272,7 +272,7 @@ export const BUTUAN_STORES: Store[] = [
     category: 'Bakery',
     address: 'J.C. Aquino Ave, Butuan City',
     barangay: 'Libertad',
-    image: 'https://images.unsplash.com/photo-1486427944544-d2c246c4df14?w=400&h=300&fit=crop',
+    image: 'https://images.unsplash.com/photo-1535141192574-5d4897c82536?w=500', // Premium Cake (Goldilocks vibe)
     rating: 4.6,
     isOpen: true,
     openHours: '8:00 AM - 9:00 PM',

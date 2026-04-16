@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,107 +6,152 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Animated,
+  Dimensions,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 
+const { width } = Dimensions.get('window');
+
 export default function UserProfileScreen({ navigation }: any) {
   const { user, signOut } = useAuth();
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
   const handleLogout = async () => {
     try {
       await signOut();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Landing' }],
-      });
     } catch (error) {
       console.log('Error logging out: ', error);
     }
   };
 
+  const menuSections = [
+    {
+      title: 'FINANCIAL & LOGS',
+      items: [
+        { icon: 'time-outline', label: 'Order History', screen: 'Activity' },
+        { icon: 'wallet-outline', label: 'Payment Methods', sub: 'Visa •••• 4412' },
+        { icon: 'ticket-outline', label: 'Vouchers & Promos', badge: '3 NEW' },
+      ]
+    },
+    {
+      title: 'PERSONALIZATION',
+      items: [
+        { icon: 'location-outline', label: 'Manage Addresses', sub: user?.location?.city || 'Set location' },
+        { icon: 'heart-outline', label: 'Favorite Stores' },
+        { icon: 'notifications-outline', label: 'Notification Settings' },
+      ]
+    },
+    {
+      title: 'PREFERENCES',
+      items: [
+        { icon: 'shield-checkmark-outline', label: 'Privacy & Security' },
+        { icon: 'help-circle-outline', label: 'Help & Support' },
+      ]
+    }
+  ];
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        bounces={false}
+      >
+        {/* Profile Hero Section */}
+        <View style={styles.heroSection}>
+           <Image 
+            source={{ uri: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=800&fit=crop' }} 
+            style={styles.heroBg} 
+           />
+           <LinearGradient
+            colors={['transparent', 'rgba(15,20,25,0.7)', '#0f1419']}
+            style={styles.heroOverlay}
+           />
+           
+           <View style={styles.heroContent}>
+              <View style={styles.avatarContainer}>
+                 <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'U'}</Text>
+                 </View>
+                 <View style={styles.identityBadge}>
+                    <Ionicons name="checkmark-seal" size={16} color={COLORS.white} />
+                 </View>
+              </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarCircle}>
-             <Text style={styles.avatarLetter}>{user?.name?.charAt(0).toUpperCase() || 'U'}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.profileRole}>CUSTOMER ACCOUNT</Text>
-            <Text style={styles.profileName} numberOfLines={1}>{user?.name || 'User'}</Text>
-            <Text style={styles.profileEmail} numberOfLines={1}>{user?.email}</Text>
-          </View>
+              <Text style={styles.userName}>{user?.name || 'Fetch User'}</Text>
+              <View style={styles.tierBadge}>
+                 <Ionicons name="star" size={10} color={COLORS.primaryLight} />
+                 <Text style={styles.tierText}>PLATINUM MEMBER</Text>
+              </View>
+           </View>
         </View>
 
-        {/* Location / Default Address */}
-        <Text style={styles.sectionTitle}>Home Address</Text>
-        <View style={styles.infoCard}>
-          <View style={styles.iconBox}>
-            <Ionicons name="home" size={24} color={COLORS.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.infoTitle}>
-              {user?.location?.city || 'City not set'}, {user?.location?.province || 'Province'}
-            </Text>
-            <Text style={styles.infoSub}>Default delivery area</Text>
-          </View>
-          <TouchableOpacity onPress={() => navigation.navigate('AddressEdit')}>
-             <Text style={styles.editText}>Edit</Text>
-          </TouchableOpacity>
-        </View>
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], marginTop: -32 }}>
+           {/* Wallet Widget */}
+           <View style={styles.walletWidget}>
+              <View style={styles.walletInfo}>
+                 <Text style={styles.walletLabel}>FETCH COINS</Text>
+                 <Text style={styles.walletValue}>2,480.00</Text>
+              </View>
+              <View style={styles.walletDivider} />
+              <TouchableOpacity style={styles.topUpBtn}>
+                 <Text style={styles.topUpText}>TOP UP</Text>
+              </TouchableOpacity>
+           </View>
 
-        {/* Quick Links */}
-        <Text style={styles.sectionTitle}>Account</Text>
-        <View style={styles.settingsGroup}>
-          {[
-            { icon: 'time-outline', label: 'Order History', dest: 'Activity' },
-            { icon: 'heart-outline', label: 'Saved Stores' },
-            { icon: 'card-outline', label: 'Payment Methods' },
-            { icon: 'gift-outline', label: 'Promos & Vouchers' },
-          ].map((item, i) => (
-            <TouchableOpacity 
-              key={i} 
-              style={styles.settingItem}
-              onPress={() => navigation.navigate(item.dest || 'GenericContent', { title: item.label })}
-            >
-              <Ionicons name={item.icon as any} size={22} color={COLORS.onSurfaceVariant} />
-              <Text style={styles.settingLabel}>{item.label}</Text>
-              <Ionicons name="chevron-forward" size={18} color={COLORS.outlineVariant} />
-            </TouchableOpacity>
-          ))}
-        </View>
+           <View style={styles.mainMenu}>
+              {menuSections.map((section, sidx) => (
+                 <View key={sidx} style={styles.sectionGroup}>
+                    <Text style={styles.sectionTitle}>{section.title}</Text>
+                    <View style={styles.cardGroup}>
+                       {section.items.map((item, iidx) => (
+                          <TouchableOpacity 
+                            key={iidx} 
+                            style={[styles.menuItem, iidx === section.items.length - 1 && styles.lastItem]}
+                            onPress={() => item.screen ? navigation.navigate(item.screen) : navigation.navigate('GenericContent', { title: item.label })}
+                          >
+                             <View style={styles.iconBox}>
+                                <Ionicons name={item.icon as any} size={20} color={COLORS.onSurface} />
+                             </View>
+                             <View style={{ flex: 1 }}>
+                                <Text style={styles.itemLabel}>{item.label}</Text>
+                                {item.sub && <Text style={styles.itemSub}>{item.sub}</Text>}
+                             </View>
+                             {item.badge ? (
+                                <View style={styles.itemBadge}><Text style={styles.itemBadgeText}>{item.badge}</Text></View>
+                             ) : (
+                                <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.15)" />
+                             )}
+                          </TouchableOpacity>
+                       ))}
+                    </View>
+                 </View>
+              ))}
 
-        <Text style={styles.sectionTitle}>Support & About</Text>
-        <View style={styles.settingsGroup}>
-          {[
-            { icon: 'chatbubbles-outline', label: 'Help Center' },
-            { icon: 'document-text-outline', label: 'Terms of Service' },
-            { icon: 'shield-outline', label: 'Privacy Policy' },
-          ].map((item, i) => (
-            <TouchableOpacity 
-              key={i} 
-              style={[
-                styles.settingItem, 
-                i === 2 && { borderBottomWidth: 0 }
-              ]}
-              onPress={() => navigation.navigate('GenericContent', { title: item.label })}
-            >
-              <Ionicons name={item.icon as any} size={22} color={COLORS.onSurfaceVariant} />
-              <Text style={styles.settingLabel}>{item.label}</Text>
-              <Ionicons name="chevron-forward" size={18} color={COLORS.outlineVariant} />
-            </TouchableOpacity>
-          ))}
-        </View>
+              <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                 <Text style={styles.logoutText}>SECURE LOGOUT</Text>
+                 <Ionicons name="log-out-outline" size={18} color={COLORS.error} />
+              </TouchableOpacity>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out" size={22} color={COLORS.error} />
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
+              <Text style={styles.versionText}>FETCHMEUP V 4.2.0 • BUILT FOR BUTUAN</Text>
+           </View>
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -115,133 +160,208 @@ export default function UserProfileScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#0f1419',
   },
   scrollContent: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: 60,
-    paddingBottom: 40,
+    flexGrow: 1,
+    backgroundColor: '#F8F9FA',
   },
-  profileHeader: {
-    flexDirection: 'row',
+  heroSection: {
+    height: 300,
+    width: '100%',
+    justifyContent: 'flex-end',
+    paddingBottom: 48,
+  },
+  heroBg: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroContent: {
     alignItems: 'center',
-    gap: SPACING.lg,
-    marginBottom: SPACING.xxl,
+    gap: 8,
   },
-  avatarCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: `${COLORS.primary}20`,
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+  avatar: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: COLORS.primary,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarLetter: {
-    fontSize: 36,
+  avatarText: {
+    fontSize: 32,
     fontWeight: '900',
-    color: COLORS.primary,
+    color: COLORS.white,
   },
-  profileRole: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 2,
-    color: COLORS.primary,
-    marginBottom: 4,
+  identityBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.tertiary,
+    borderWidth: 3,
+    borderColor: '#0f1419',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  profileName: {
-    fontSize: 28,
+  userName: {
+    fontSize: 24,
     fontWeight: '900',
-    color: COLORS.onSurface,
+    color: COLORS.white,
     letterSpacing: -0.5,
-    marginBottom: 2,
   },
-  profileEmail: {
-    fontSize: 13,
-    color: COLORS.onSurfaceVariant,
-    fontWeight: '500',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.onSurface,
-    letterSpacing: -0.3,
-    marginBottom: SPACING.md,
-    marginTop: SPACING.lg,
-  },
-  infoCard: {
+  tierBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceLowest,
-    padding: SPACING.lg,
-    borderRadius: RADIUS.lg,
-    gap: SPACING.md,
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  tierText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: COLORS.primaryLight,
+    letterSpacing: 1.5,
+  },
+  walletWidget: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    marginHorizontal: 24,
+    borderRadius: 24,
+    padding: 20,
+    ...SHADOWS.md,
+  },
+  walletInfo: {
+    flex: 1,
+  },
+  walletLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.3)',
+    letterSpacing: 1,
+  },
+  walletValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: COLORS.onSurface,
+    marginTop: 2,
+  },
+  walletDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#F1F3F5',
+    marginHorizontal: 20,
+  },
+  topUpBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  topUpText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: COLORS.white,
+    letterSpacing: 1,
+  },
+  mainMenu: {
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 60,
+  },
+  sectionGroup: {
+    marginBottom: 32,
+  },
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+    color: 'rgba(0,0,0,0.3)',
+    marginBottom: 16,
+    paddingLeft: 4,
+  },
+  cardGroup: {
+    backgroundColor: COLORS.white,
+    borderRadius: 28,
+    overflow: 'hidden',
     ...SHADOWS.sm,
-    borderWidth: 1,
-    borderColor: `${COLORS.outlineVariant}20`,
-    marginBottom: SPACING.lg,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8F9FA',
+    gap: 16,
+  },
+  lastItem: {
+    borderBottomWidth: 0,
   },
   iconBox: {
     width: 44,
     height: 44,
-    borderRadius: RADIUS.full,
-    backgroundColor: `${COLORS.primary}12`,
+    borderRadius: 14,
+    backgroundColor: '#F8F9FA',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  infoTitle: {
+  itemLabel: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.onSurface,
   },
-  infoSub: {
-    fontSize: 13,
-    color: COLORS.onSurfaceVariant,
+  itemSub: {
+    fontSize: 11,
+    color: 'rgba(0,0,0,0.4)',
     marginTop: 2,
+    fontWeight: '500',
   },
-  editText: {
-    fontSize: 13,
-    fontWeight: '700',
+  itemBadge: {
+    backgroundColor: `${COLORS.primary}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  itemBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
     color: COLORS.primary,
-  },
-  settingsGroup: {
-    backgroundColor: COLORS.surfaceLowest,
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
-    ...SHADOWS.sm,
-    borderWidth: 1,
-    borderColor: `${COLORS.outlineVariant}15`,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.xl,
-    borderBottomWidth: 1,
-    borderBottomColor: `${COLORS.outlineVariant}20`,
-  },
-  settingLabel: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.onSurface,
   },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: `${COLORS.error}10`,
-    paddingVertical: SPACING.xl,
-    borderRadius: RADIUS.xl,
-    marginTop: 40,
-    marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: `${COLORS.error}25`,
+    paddingVertical: 18,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#F1F3F5',
+    marginBottom: 24,
   },
   logoutText: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '900',
     color: COLORS.error,
+    letterSpacing: 2,
+  },
+  versionText: {
+    textAlign: 'center',
+    fontSize: 8,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.15)',
+    letterSpacing: 1,
   },
 });

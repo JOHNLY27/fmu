@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
-import { Store, PabiliItem } from '../types';
+import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
+import { Store } from '../types';
 import { createOrder } from '../services/orderService';
 import { useAuth } from '../context/AuthContext';
 import BarangaySelector from '../components/ui/BarangaySelector';
@@ -29,15 +29,13 @@ interface PabiliItemInput {
   id: string;
   name: string;
   quantity: string;
-  estimatedPrice: string;
   notes: string;
 }
 
 const createEmptyItem = (): PabiliItemInput => ({
-  id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+  id: Math.random().toString(36).substr(2, 9),
   name: '',
   quantity: '1',
-  estimatedPrice: '',
   notes: '',
 });
 
@@ -46,85 +44,51 @@ export default function PabiliOrderScreen({ navigation, route }: any) {
   const { user } = useAuth();
   
   const [items, setItems] = useState<PabiliItemInput[]>([createEmptyItem()]);
-  const [specialInstructions, setSpecialInstructions] = useState('');
+  const [quickCommand, setQuickCommand] = useState('');
   const [dropoff, setDropoff] = useState('');
-  const [tip, setTip] = useState('');
+  const [tip, setTip] = useState(20);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
 
-  const addItem = () => {
-    setItems(prev => [...prev, createEmptyItem()]);
-    setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 200);
-  };
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
-  const removeItem = (id: string) => {
-    if (items.length === 1) return;
-    setItems(prev => prev.filter(item => item.id !== id));
-  };
-
+  const addItem = () => setItems(prev => [...prev, createEmptyItem()]);
+  const removeItem = (id: string) => items.length > 1 && setItems(prev => prev.filter(i => i.id !== id));
+  
   const updateItem = (id: string, field: keyof PabiliItemInput, value: string) => {
-    setItems(prev =>
-      prev.map(item => (item.id === id ? { ...item, [field]: value } : item))
-    );
+    setItems(prev => prev.map(i => (i.id === id ? { ...i, [field]: value } : i)));
   };
 
-  const estimatedTotal = items.reduce((sum, item) => {
-    const price = parseFloat(item.estimatedPrice) || 0;
-    const qty = parseInt(item.quantity) || 1;
-    return sum + price * qty;
-  }, 0);
-
-  const serviceFee = 49;
-  const tipAmount = parseFloat(tip) || 0;
-  const grandTotal = estimatedTotal + serviceFee + tipAmount;
-
-  const handleSubmitOrder = async () => {
-    // Validation
-    const validItems = items.filter(i => i.name.trim() !== '');
-    if (validItems.length === 0) {
-      Alert.alert('Missing Items', 'Please add at least one item you want to buy.');
+  const handleSubmit = async () => {
+    const validItems = items.filter(i => i.name.trim());
+    if ((!quickCommand.trim() && validItems.length === 0) || !dropoff) {
+      Alert.alert('Incomplete Session', 'Provide a Quick Directive or add Items to proceed.');
       return;
     }
-    if (!dropoff) {
-      Alert.alert('Missing Delivery Address', 'Please select your delivery barangay.');
-      return;
-    }
-    if (!user) {
-      Alert.alert('Not Logged In', 'Please log in first to place an order.');
-      return;
-    }
-
+    
     setIsSubmitting(true);
     try {
-      const itemsSummary = validItems
-        .map(i => `${i.quantity}x ${i.name}${i.notes ? ` (${i.notes})` : ''}`)
-        .join(', ');
-
+      const summary = validItems.map(i => `${i.quantity}x ${i.name}`).join(', ');
       const orderId = await createOrder({
-        userId: user.uid,
+        userId: user?.uid || '',
         type: 'pabili',
-        pickupLocation: `${store.name} - ${store.address}`,
-        dropoffLocation: `${dropoff}, Butuan City`,
-        price: grandTotal,
-        itemDetails: itemsSummary,
-        customerCity: user.location?.city || 'Butuan City',
-        customerProvince: user.location?.province || 'Agusan del Norte',
+        pickupLocation: store.name,
+        dropoffLocation: `${dropoff}, Butuan`,
+        price: 49 + tip, 
+        itemDetails: `Personal Command: ${quickCommand ? quickCommand : summary}`,
+        customerCity: user?.location?.city || 'Butuan',
+        customerProvince: user?.location?.province || 'Agusan del Norte',
       });
-
-      Alert.alert(
-        '🎉 Order Placed!',
-        `Your pabili order from ${store.name} has been submitted. A rider will pick it up soon!`,
-        [
-          {
-            text: 'Track Order',
-            onPress: () => navigation.navigate('TrackingDetail', { orderId }),
-          },
-        ]
-      );
+      navigation.navigate('TrackingDetail', { orderId });
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to place order.');
+      Alert.alert('Error', e.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -132,256 +96,152 @@ export default function PabiliOrderScreen({ navigation, route }: any) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-
-      {/* Store Header with Image */}
-      <View style={styles.heroContainer}>
-        <Image source={{ uri: store.image }} style={styles.heroImage} resizeMode="cover" />
-        <LinearGradient
-          colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)']}
-          style={styles.heroGradient}
-        />
-        <View style={styles.heroOverlay}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.white} />
-          </TouchableOpacity>
-          <View style={styles.heroContent}>
-            <View style={styles.heroBadge}>
-              <Ionicons name="bag-handle" size={12} color={COLORS.white} />
-              <Text style={styles.heroBadgeText}>PABILI ORDER</Text>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
+      {/* Store Identity Header */}
+      <View style={styles.storeHero}>
+         <Image source={{ uri: store.image }} style={styles.heroImg} />
+         <LinearGradient colors={['rgba(0,0,0,0.5)', '#0f1419']} style={styles.heroOverlay} />
+         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+         </TouchableOpacity>
+         <View style={styles.heroContent}>
+            <View style={styles.verifiedBadge}>
+               <Ionicons name="shield-checkmark" size={14} color={COLORS.white} />
+               <Text style={styles.verifiedText}>RELIABLE PARTNER</Text>
             </View>
-            <Text style={styles.heroStoreName}>{store.name}</Text>
-            <View style={styles.heroMeta}>
-              <View style={styles.heroMetaItem}>
-                <Ionicons name="location" size={13} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.heroMetaText}>{store.barangay}</Text>
-              </View>
-              <View style={styles.heroMetaItem}>
-                <Ionicons name="star" size={13} color="#FFB800" />
-                <Text style={styles.heroMetaText}>{store.rating}</Text>
-              </View>
-              <View style={[styles.heroStatusDot, { backgroundColor: store.isOpen ? '#5cfd80' : '#ff6b6b' }]} />
-              <Text style={styles.heroMetaText}>{store.isOpen ? 'Open Now' : 'Closed'}</Text>
-            </View>
-          </View>
-        </View>
+            <Text style={styles.storeName}>{store.name}</Text>
+            <Text style={styles.storeLoc}>{store.barangay}, Butuan City</Text>
+         </View>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          ref={scrollRef}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Instruction Card */}
-          <View style={styles.instructionCard}>
-            <View style={styles.instructionIcon}>
-              <Text style={{ fontSize: 24 }}>📝</Text>
-            </View>
-            <View style={styles.instructionContent}>
-              <Text style={styles.instructionTitle}>How it works</Text>
-              <Text style={styles.instructionDesc}>
-                List the items you want, include estimated prices, and our rider will buy them for you from {store.name}!
-              </Text>
-            </View>
-          </View>
-
-          {/* Delivery Location */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>📍 DELIVER TO</Text>
-            <BarangaySelector
-              label=""
-              value={dropoff}
-              onSelect={setDropoff}
-              placeholder="Select your delivery barangay"
-              icon="location"
-            />
-          </View>
-
-          {/* Items List */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionLabel}>🛒 YOUR SHOPPING LIST</Text>
-              <Text style={styles.itemCount}>{items.filter(i => i.name.trim()).length} item(s)</Text>
-            </View>
-
-            {items.map((item, index) => (
-              <Animated.View key={item.id} style={styles.itemCard}>
-                <View style={styles.itemHeader}>
-                  <View style={styles.itemNumber}>
-                    <Text style={styles.itemNumberText}>{index + 1}</Text>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            
+            <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+               
+               {/* Coordinate Block */}
+               <View style={styles.coordBlock}>
+                  <View style={styles.coordIcon}>
+                     <Ionicons name="navigate" size={18} color={COLORS.primary} />
                   </View>
-                  <Text style={styles.itemHeaderTitle}>Item {index + 1}</Text>
-                  {items.length > 1 && (
-                    <TouchableOpacity
-                      onPress={() => removeItem(item.id)}
-                      style={styles.removeBtn}
-                    >
-                      <Ionicons name="trash-outline" size={16} color={COLORS.error} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                <View style={styles.itemFields}>
-                  <View style={styles.itemFieldFull}>
-                    <Text style={styles.fieldLabel}>Item Name *</Text>
-                    <TextInput
-                      style={styles.fieldInput}
-                      placeholder="e.g., Bear Brand Milk, Safeguard Soap..."
-                      placeholderTextColor={`${COLORS.onSurfaceVariant}50`}
-                      value={item.name}
-                      onChangeText={(v) => updateItem(item.id, 'name', v)}
-                    />
+                  <View style={{ flex: 1 }}>
+                     <BarangaySelector 
+                        value={dropoff} 
+                        onSelect={setDropoff} 
+                        placeholder="Set Dropoff Coordinates" 
+                        variant="minimal"
+                     />
+                     <Text style={styles.coordSub}>Your agent will execute directives and deliver here</Text>
                   </View>
+               </View>
 
-                  <View style={styles.itemFieldRow}>
-                    <View style={styles.itemFieldHalf}>
-                      <Text style={styles.fieldLabel}>Qty</Text>
-                      <TextInput
-                        style={styles.fieldInput}
-                        placeholder="1"
-                        placeholderTextColor={`${COLORS.onSurfaceVariant}50`}
-                        value={item.quantity}
-                        onChangeText={(v) => updateItem(item.id, 'quantity', v)}
-                        keyboardType="numeric"
-                      />
-                    </View>
-                    <View style={styles.itemFieldHalf}>
-                      <Text style={styles.fieldLabel}>Est. Price (₱)</Text>
-                      <TextInput
-                        style={styles.fieldInput}
-                        placeholder="0.00"
-                        placeholderTextColor={`${COLORS.onSurfaceVariant}50`}
-                        value={item.estimatedPrice}
-                        onChangeText={(v) => updateItem(item.id, 'estimatedPrice', v)}
-                        keyboardType="decimal-pad"
-                      />
-                    </View>
+               {/* Quick Command Box */}
+               <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>QUICK DIRECTIVE</Text>
+               </View>
+               <View style={styles.commandBlock}>
+                  <TextInput
+                    style={styles.commandInput}
+                    placeholder="Type your full command here (e.g. 'Buy me 2 milk and specific snacks')"
+                    placeholderTextColor="rgba(0,0,0,0.3)"
+                    multiline
+                    value={quickCommand}
+                    onChangeText={setQuickCommand}
+                  />
+                  <View style={styles.voiceIndicator}>
+                     <Ionicons name="mic" size={16} color={COLORS.primary} />
                   </View>
+               </View>
 
-                  <View style={styles.itemFieldFull}>
-                    <Text style={styles.fieldLabel}>Notes (optional)</Text>
-                    <TextInput
-                      style={[styles.fieldInput, { height: 36 }]}
-                      placeholder="e.g., large size, specific brand..."
-                      placeholderTextColor={`${COLORS.onSurfaceVariant}50`}
-                      value={item.notes}
-                      onChangeText={(v) => updateItem(item.id, 'notes', v)}
-                    />
+               {/* Item Procurement List */}
+               <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>STRUCTURED DIRECTIVES (OPTIONAL)</Text>
+                  <TouchableOpacity onPress={addItem}>
+                     <Text style={styles.addText}>+ ADD ITEM</Text>
+                  </TouchableOpacity>
+               </View>
+
+               {items.map((item, idx) => (
+                  <View key={item.id} style={styles.itemCard}>
+                     <View style={styles.cardHeader}>
+                        <View style={styles.itemIdx}><Text style={styles.idxText}>{idx + 1}</Text></View>
+                        <TextInput 
+                           style={styles.itemTitleInput}
+                           placeholder="Item Name (e.g. Milk 1L)"
+                           value={item.name}
+                           onChangeText={(v) => updateItem(item.id, 'name', v)}
+                        />
+                        <View style={styles.qtyBox}>
+                           <TextInput 
+                              style={styles.qtyInput}
+                              value={item.quantity}
+                              onChangeText={(v) => updateItem(item.id, 'quantity', v)}
+                              keyboardType="numeric"
+                           />
+                        </View>
+                        {items.length > 1 && (
+                           <TouchableOpacity onPress={() => removeItem(item.id)}>
+                              <Ionicons name="close-circle" size={20} color="rgba(0,0,0,0.1)" />
+                           </TouchableOpacity>
+                        )}
+                     </View>
+                     <TextInput 
+                        style={styles.noteInput}
+                        placeholder="Add Brand, Size or Variant (optional)"
+                        value={item.notes}
+                        onChangeText={(v) => updateItem(item.id, 'notes', v)}
+                        placeholderTextColor="rgba(0,0,0,0.3)"
+                     />
                   </View>
-                </View>
-              </Animated.View>
-            ))}
+               ))}
 
-            {/* Add Item Button */}
-            <TouchableOpacity style={styles.addItemBtn} onPress={addItem}>
-              <LinearGradient
-                colors={[`${COLORS.primary}10`, `${COLORS.primary}05`]}
-                style={styles.addItemBtnGradient}
-              >
-                <Ionicons name="add-circle" size={22} color={COLORS.primary} />
-                <Text style={styles.addItemText}>Add Another Item</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+               {/* Tip Section */}
+               <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>RIDER APPRECIATION</Text>
+               </View>
+               <View style={styles.tipRow}>
+                  {[20, 50, 100].map(amt => (
+                     <TouchableOpacity 
+                        key={amt} 
+                        style={[styles.tipChip, tip === amt && styles.activeTip]}
+                        onPress={() => setTip(amt)}
+                     >
+                        <Text style={[styles.tipText, tip === amt && styles.activeTipText]}>₱{amt}</Text>
+                     </TouchableOpacity>
+                  ))}
+               </View>
 
-          {/* Special Instructions */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>💬 SPECIAL INSTRUCTIONS</Text>
-            <TextInput
-              style={styles.instructionsInput}
-              placeholder="e.g. Paki-check kung may stock pa ng Alaska Evap. Kung wala, pwede Birch Tree na lang. Salamat!"
-              placeholderTextColor={`${COLORS.onSurfaceVariant}40`}
-              value={specialInstructions}
-              onChangeText={setSpecialInstructions}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-          </View>
+               {/* Summary Card */}
+               <View style={styles.summaryCard}>
+                  <View style={styles.sumRow}>
+                     <Text style={styles.sumLabel}>Service Procurement Fee</Text>
+                     <Text style={styles.sumVal}>₱49.00</Text>
+                  </View>
+                  <View style={styles.sumRow}>
+                     <Text style={styles.sumLabel}>Rider Tip</Text>
+                     <Text style={styles.sumVal}>₱{tip.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.divider} />
+                  <View style={styles.totalRow}>
+                     <Text style={styles.totalLabel}>Service Total</Text>
+                     <Text style={styles.totalVal}>₱{(49 + tip).toFixed(2)}</Text>
+                  </View>
+                  <Text style={styles.disclaimer}>* Items cost will be paid directly to the rider upon delivery.</Text>
+               </View>
 
-          {/* Rider Tip */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>💝 TIP YOUR RIDER</Text>
-            <View style={styles.tipRow}>
-              {['0', '20', '50', '100'].map((amount) => (
-                <TouchableOpacity
-                  key={amount}
-                  style={[styles.tipChip, tip === amount && styles.tipChipActive]}
-                  onPress={() => setTip(amount)}
-                >
-                  <Text style={[styles.tipChipText, tip === amount && styles.tipChipTextActive]}>
-                    {amount === '0' ? 'None' : `₱${amount}`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-              <View style={styles.tipCustom}>
-                <Text style={styles.tipCurrency}>₱</Text>
-                <TextInput
-                  style={styles.tipInput}
-                  placeholder="Other"
-                  placeholderTextColor={`${COLORS.onSurfaceVariant}50`}
-                  value={!['0', '20', '50', '100'].includes(tip) ? tip : ''}
-                  onChangeText={setTip}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-          </View>
+               <Button 
+                  title={isSubmitting ? "Executing Command..." : "Issue Mission Command"} 
+                  onPress={handleSubmit}
+                  loading={isSubmitting}
+                  variant="primary"
+                  size="xl"
+                  fullWidth
+               />
+               <Text style={styles.subText}>Riders will contact you regarding stock availability.</Text>
 
-          {/* Order Summary */}
-          <View style={styles.summaryCard}>
-            <LinearGradient
-              colors={[COLORS.surfaceLowest, `${COLORS.primary}08`]}
-              style={styles.summaryGradient}
-            >
-              <Text style={styles.summaryTitle}>Order Summary</Text>
-              
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Estimated Items Total</Text>
-                <Text style={styles.summaryValue}>₱{estimatedTotal.toFixed(2)}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Service Fee</Text>
-                <Text style={styles.summaryValue}>₱{serviceFee.toFixed(2)}</Text>
-              </View>
-              {tipAmount > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Rider Tip</Text>
-                  <Text style={[styles.summaryValue, { color: COLORS.tertiary }]}>₱{tipAmount.toFixed(2)}</Text>
-                </View>
-              )}
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryRow}>
-                <Text style={styles.grandTotalLabel}>Estimated Total</Text>
-                <Text style={styles.grandTotalValue}>₱{grandTotal.toFixed(2)}</Text>
-              </View>
-
-              <Text style={styles.summaryNote}>
-                * Final amount may vary based on actual item prices at the store.
-              </Text>
-            </LinearGradient>
-          </View>
-
-          {/* Submit Button */}
-          <View style={styles.submitSection}>
-            <Button
-              title={isSubmitting ? 'Placing Order...' : `Place Pabili Order — ₱${grandTotal.toFixed(2)}`}
-              onPress={handleSubmitOrder}
-              loading={isSubmitting}
-              style={styles.submitBtn}
-            />
-            <Text style={styles.submitNote}>
-              You'll be able to chat with your rider once they accept
-            </Text>
-          </View>
-
-          <View style={{ height: 40 }} />
-        </ScrollView>
+            </Animated.View>
+         </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -390,367 +250,269 @@ export default function PabiliOrderScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#F8F9FA',
   },
-  // Hero
-  heroContainer: {
-    height: 220,
-    overflow: 'hidden',
-  },
-  heroImage: {
+  storeHero: {
+    height: 250,
     width: '100%',
-    height: '100%',
-    position: 'absolute',
+    justifyContent: 'flex-end',
+    paddingBottom: 32,
   },
-  heroGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  heroImg: {
+    ...StyleSheet.absoluteFillObject,
   },
   heroOverlay: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xl,
-    paddingTop: 50,
-    paddingBottom: SPACING.xl,
+    ...StyleSheet.absoluteFillObject,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+  backBtn: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroContent: {},
-  heroBadge: {
+  heroContent: {
+    paddingHorizontal: 24,
+  },
+  verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: COLORS.primary,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
+    gap: 6,
+    backgroundColor: COLORS.tertiary,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: RADIUS.full,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
     marginBottom: 8,
   },
-  heroBadgeText: {
-    fontSize: 9,
+  verifiedText: {
+    fontSize: 8,
     fontWeight: '900',
     color: COLORS.white,
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
-  heroStoreName: {
-    fontSize: 26,
+  storeName: {
+    fontSize: 28,
     fontWeight: '900',
     color: COLORS.white,
-    marginBottom: 6,
     letterSpacing: -0.5,
   },
-  heroMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  heroMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  heroMetaText: {
+  storeLoc: {
     fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
   },
-  heroStatusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  // Content
   scrollContent: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.xl,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 32,
+    paddingBottom: 60,
   },
-  instructionCard: {
+  coordBlock: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: `${COLORS.secondary}10`,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.xl,
-    gap: SPACING.md,
+    backgroundColor: COLORS.white,
+    padding: 16,
+    borderRadius: 20,
+    gap: 16,
+    ...SHADOWS.sm,
+    marginBottom: 32,
   },
-  instructionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.full,
-    backgroundColor: `${COLORS.secondary}15`,
+  coordIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: `${COLORS.primary}10`,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  instructionContent: {
-    flex: 1,
-  },
-  instructionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.secondary,
-    marginBottom: 2,
-  },
-  instructionDesc: {
-    fontSize: 12,
-    color: COLORS.onSurfaceVariant,
-    fontWeight: '500',
-    lineHeight: 17,
-  },
-  // Sections
-  section: {
-    marginBottom: SPACING.xl,
-  },
-  sectionLabel: {
+  coordSub: {
     fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 2,
-    color: COLORS.primary,
-    marginBottom: SPACING.sm,
+    fontWeight: '700',
+    color: 'rgba(0,0,0,0.3)',
+    marginTop: 2,
+    letterSpacing: 0.5,
   },
-  sectionHeaderRow: {
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
-  itemCount: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.onSurfaceVariant,
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+    color: 'rgba(0,0,0,0.25)',
   },
-  // Item Card
-  itemCard: {
-    backgroundColor: COLORS.surfaceLowest,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
-    ...SHADOWS.sm,
-    borderWidth: 1,
-    borderColor: `${COLORS.outlineVariant}20`,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-    gap: SPACING.sm,
-  },
-  itemNumber: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemNumberText: {
+  addText: {
     fontSize: 12,
     fontWeight: '800',
-    color: COLORS.white,
-  },
-  itemHeaderTitle: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  removeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: RADIUS.full,
-    backgroundColor: `${COLORS.error}10`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemFields: {
-    gap: SPACING.sm,
-  },
-  itemFieldFull: {},
-  itemFieldRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  itemFieldHalf: {
-    flex: 1,
-  },
-  fieldLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-    color: `${COLORS.onSurfaceVariant}80`,
-    marginBottom: 4,
-    textTransform: 'uppercase',
-  },
-  fieldInput: {
-    backgroundColor: COLORS.surfaceLow,
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: COLORS.onSurface,
-    fontWeight: '500',
-  },
-  addItemBtn: {
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: `${COLORS.primary}25`,
-    borderStyle: 'dashed',
-  },
-  addItemBtnGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
-  },
-  addItemText: {
-    fontSize: 14,
-    fontWeight: '700',
     color: COLORS.primary,
   },
-  // Instructions
-  instructionsInput: {
-    backgroundColor: COLORS.surfaceLowest,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    fontSize: 14,
-    color: COLORS.onSurface,
-    fontWeight: '500',
-    lineHeight: 20,
-    minHeight: 100,
+  itemCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 16,
     ...SHADOWS.sm,
-    borderWidth: 1,
-    borderColor: `${COLORS.outlineVariant}20`,
   },
-  // Tips
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  itemIdx: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    backgroundColor: '#F1F3F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  idxText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: 'rgba(0,0,0,0.3)',
+  },
+  itemTitleInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.onSurface,
+  },
+  qtyBox: {
+    width: 44,
+    height: 32,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyInput: {
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'center',
+    color: COLORS.primary,
+  },
+  noteInput: {
+    marginTop: 12,
+    marginLeft: 36,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F8F9FA',
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.onSurface,
+  },
   tipRow: {
     flexDirection: 'row',
-    gap: SPACING.sm,
-    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 32,
   },
   tipChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surfaceLowest,
-    borderWidth: 1.5,
-    borderColor: `${COLORS.outlineVariant}30`,
-  },
-  tipChipActive: {
-    backgroundColor: `${COLORS.primary}12`,
-    borderColor: COLORS.primary,
-  },
-  tipChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.onSurfaceVariant,
-  },
-  tipChipTextActive: {
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  tipCustom: {
     flex: 1,
-    flexDirection: 'row',
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceLowest,
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 12,
-    borderWidth: 1.5,
-    borderColor: `${COLORS.outlineVariant}30`,
-    minWidth: 80,
+    justifyContent: 'center',
+    ...SHADOWS.sm,
   },
-  tipCurrency: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.onSurfaceVariant,
-    marginRight: 4,
+  activeTip: {
+    backgroundColor: COLORS.primary,
   },
-  tipInput: {
-    flex: 1,
+  tipText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.onSurface,
-    paddingVertical: 10,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.4)',
   },
-  // Summary
+  activeTipText: {
+    color: COLORS.white,
+  },
   summaryCard: {
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    marginBottom: SPACING.xl,
-    ...SHADOWS.md,
-    borderWidth: 1,
-    borderColor: `${COLORS.outlineVariant}15`,
+    backgroundColor: '#F1F3F5',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 24,
   },
-  summaryGradient: {
-    padding: SPACING.xl,
+  sumRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  summaryTitle: {
-    fontSize: 16,
+  sumLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(0,0,0,0.4)',
+  },
+  sumVal: {
+    fontSize: 13,
     fontWeight: '800',
     color: COLORS.onSurface,
-    marginBottom: SPACING.lg,
   },
-  summaryRow: {
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    marginVertical: 12,
+  },
+  totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: 16,
   },
-  summaryLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.onSurfaceVariant,
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: `${COLORS.outlineVariant}25`,
-    marginVertical: SPACING.md,
-  },
-  grandTotalLabel: {
+  totalLabel: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '900',
     color: COLORS.onSurface,
   },
-  grandTotalValue: {
-    fontSize: 22,
+  totalVal: {
+    fontSize: 24,
     fontWeight: '900',
     color: COLORS.primary,
   },
-  summaryNote: {
-    fontSize: 11,
-    color: `${COLORS.onSurfaceVariant}70`,
+  disclaimer: {
+    fontSize: 10,
+    color: 'rgba(0,0,0,0.35)',
+    fontWeight: '600',
     fontStyle: 'italic',
-    marginTop: SPACING.md,
-    lineHeight: 16,
   },
-  // Submit
-  submitSection: {
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  submitBtn: {
-    width: '100%',
-  },
-  submitNote: {
+  subText: {
+    textAlign: 'center',
     fontSize: 11,
-    color: COLORS.onSurfaceVariant,
-    fontWeight: '500',
+    color: 'rgba(0,0,0,0.3)',
+    marginTop: 16,
+    fontWeight: '600',
+  },
+  commandBlock: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 32,
+    ...SHADOWS.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  commandInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.onSurface,
+    minHeight: 40,
+  },
+  voiceIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: `${COLORS.primary}10`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
   },
 });

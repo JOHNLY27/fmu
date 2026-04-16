@@ -15,17 +15,19 @@ export interface ChatMessage {
   orderId: string;
   senderId: string;
   text: string;
+  imageUrl?: string;
   createdAt: Timestamp | null;
 }
 
 // 1. Send a new message
-export const sendMessage = async (orderId: string, senderId: string, text: string) => {
+export const sendMessage = async (orderId: string, senderId: string, text: string, imageUrl?: string) => {
   try {
     const messagesRef = collection(db, 'messages');
     await addDoc(messagesRef, {
       orderId,
       senderId,
       text,
+      ...(imageUrl ? { imageUrl } : {}),
       createdAt: serverTimestamp(),
     });
   } catch (error) {

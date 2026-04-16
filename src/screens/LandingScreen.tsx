@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   Image,
-  TextInput,
   ScrollView,
   TouchableOpacity,
   Dimensions,
   StatusBar,
   Animated,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,28 +17,35 @@ import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import Button from '../components/ui/Button';
 
 const { width } = Dimensions.get('window');
+const HERO_IMAGE = 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=800&h=1200&fit=crop'; // Cinematic urban shot
 
 export default function LandingScreen({ navigation }: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const scaleAnim = useRef(new Animated.Value(1.1)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
+    Animated.stagger(200, [
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 1000,
         useNativeDriver: true,
       }),
-      Animated.timing(slideAnim, {
+      Animated.spring(slideAnim, {
         toValue: 0,
-        duration: 800,
+        tension: 20,
+        friction: 7,
         useNativeDriver: true,
       }),
       Animated.timing(scaleAnim, {
         toValue: 1,
-        duration: 600,
-        delay: 200,
+        duration: 2000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 800,
         useNativeDriver: true,
       }),
     ]).start();
@@ -46,120 +53,108 @@ export default function LandingScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.logo}>VELOCITY</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('RiderPortal')}>
-          <Text style={styles.joinLink}>Join Us</Text>
-        </TouchableOpacity>
+      {/* Background Image Wrapper */}
+      <View style={styles.bgWrapper}>
+        <Animated.Image
+          source={{ uri: HERO_IMAGE }}
+          style={[styles.bgImage, { transform: [{ scale: scaleAnim }] }]}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.4)', COLORS.onSurface]}
+          style={styles.gradientOverlay}
+        />
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        bounces={false}
       >
-        {/* Badge */}
-        <Animated.View style={[styles.badge, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <Text style={styles.badgeText}>START YOUR ENGINE</Text>
-        </Animated.View>
+        <View style={styles.heroSection}>
+          <Animated.View style={[styles.header, { opacity: logoOpacity }]}>
+            <View style={styles.logoBadge}>
+               <Text style={styles.logo}>FETCH <Text style={styles.logoHighlight}>ME UP</Text></Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.riderBtn}
+              onPress={() => navigation.navigate('RiderPortal')}
+            >
+              <Text style={styles.riderBtnText}>BECOME A RIDER</Text>
+              <Ionicons name="chevron-forward" size={12} color={COLORS.primary} />
+            </TouchableOpacity>
+          </Animated.View>
 
-        {/* Hero Title */}
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          <Text style={styles.heroTitle}>
-            Join the{' '}
-            <Text style={styles.heroHighlight}>Fetch Me Up</Text>
-            {' '}movement.
-          </Text>
-        </Animated.View>
+          <View style={styles.spacer} />
 
-        {/* Hero Subtitle */}
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          <Text style={styles.heroSubtitle}>
-            Experience logistics redefined. From precision ride-hailing to curated local deliveries, speed meets sophistication.
-          </Text>
-        </Animated.View>
-
-        {/* Hero Image */}
-        <Animated.View style={[styles.heroImageContainer, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=600&h=400&fit=crop' }}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
-          <LinearGradient
-            colors={['transparent', `${COLORS.primary}66`]}
-            style={styles.heroOverlay}
-          />
-          <View style={styles.heroCard}>
-            <Text style={styles.heroCardLabel}>REAL-TIME SYNC</Text>
-            <Text style={styles.heroCardText}>
-              Curating the fastest routes through the city's heartbeat.
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            <View style={styles.cityBadge}>
+              <Ionicons name="location" size={14} color={COLORS.primary} />
+              <Text style={styles.cityText}>TRUSTED IN BUTUAN CITY</Text>
+            </View>
+            
+            <Text style={styles.heroTitle}>
+              Urban Logistics.{'\n'}
+              <Text style={styles.heroHighlightText}>Perfected.</Text>
             </Text>
-          </View>
-        </Animated.View>
+            
+            <Text style={styles.heroSubtitle}>
+              Experience the kinetic speed of premium ride-hailing and curated local deliveries. Your city, fetched.
+            </Text>
 
-        {/* Sign-Up Form */}
-        <View style={styles.formContainer}>
-          <Text style={styles.formTitle}>Create Account</Text>
-          <Text style={styles.formSubtitle}>Elevate your mobility today.</Text>
-
-          <View style={styles.formFields}>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>FULL NAME</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="John Doe"
-                placeholderTextColor={`${COLORS.onSurfaceVariant}50`}
-              />
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>5m</Text>
+                <Text style={styles.statLabel}>Avg. Pickup</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>24/7</Text>
+                <Text style={styles.statLabel}>Service</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>4.9</Text>
+                <Text style={styles.statLabel}>Rating</Text>
+              </View>
             </View>
+          </Animated.View>
+        </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>EMAIL ADDRESS</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="name@company.com"
-                placeholderTextColor={`${COLORS.onSurfaceVariant}50`}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
+        <Animated.View 
+          style={[
+            styles.actionCard,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+          ]}
+        >
+          <Text style={styles.actionTitle}>Elevate your journey</Text>
+          <Text style={styles.actionSub}>Join thousands of users moving smarter.</Text>
 
+          <View style={styles.btnGroup}>
             <Button
-              title="Sign Up"
-              onPress={() => navigation.navigate('Home')}
-              size="lg"
+              title="Get Started"
+              onPress={() => navigation.navigate('Login')}
+              size="xl"
               fullWidth
-              icon={<Ionicons name="arrow-forward" size={22} color={COLORS.white} />}
+              variant="primary"
+              icon={<Ionicons name="arrow-forward" size={20} color={COLORS.white} />}
             />
-
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity
-              style={styles.loginLink}
+            
+            <TouchableOpacity 
+              style={styles.loginBtn}
               onPress={() => navigation.navigate('Login')}
             >
-              <Text style={styles.loginLinkText}>Log In instead</Text>
-              <View style={styles.loginLinkBar} />
+              <Text style={styles.loginBtnText}>I already have an account</Text>
+              <Text style={styles.loginBtnLink}>Log In</Text>
             </TouchableOpacity>
           </View>
+        </Animated.View>
 
-          <Text style={styles.termsText}>
-            By proceeding, you agree to Velocity's Terms of Logistics & Data Curation Privacy Standards.
-          </Text>
-        </View>
+        <Text style={styles.copyright}>
+          VELOCITY LOGISTICS CORP • DATA PRIVACY PROTECTED
+        </Text>
       </ScrollView>
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>VELOCITY LOGISTICS CORP © 2024</Text>
-      </View>
     </View>
   );
 }
@@ -167,198 +162,180 @@ export default function LandingScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.onSurface,
+  },
+  bgWrapper: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.onSurface,
+  },
+  bgImage: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.7,
+  },
+  gradientOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 40,
+  },
+  heroSection: {
+    height: Dimensions.get('window').height * 0.75,
+    paddingHorizontal: SPACING.xl,
+    justifyContent: 'space-between',
+    paddingTop: 60,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
-    paddingTop: 50,
-    paddingBottom: SPACING.md,
-    backgroundColor: COLORS.surface,
+  },
+  logoBadge: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   logo: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: '900',
-    fontStyle: 'italic',
+    color: COLORS.white,
+    letterSpacing: -0.5,
+  },
+  logoHighlight: {
     color: COLORS.primary,
-    letterSpacing: -1,
   },
-  joinLink: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.primary,
-    textDecorationLine: 'underline',
-  },
-  scrollContent: {
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: 80,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.secondaryContainer,
-    paddingHorizontal: 16,
+  riderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: RADIUS.full,
-    marginBottom: SPACING.lg,
-    marginTop: SPACING.lg,
+    ...SHADOWS.sm,
   },
-  badgeText: {
+  riderBtnText: {
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 3,
-    color: COLORS.secondary,
-    textTransform: 'uppercase',
+    color: COLORS.primary,
+    letterSpacing: 1,
+  },
+  spacer: {
+    flex: 1,
+  },
+  cityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,122,44,0.15)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,122,44,0.3)',
+  },
+  cityText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.primaryLight,
+    letterSpacing: 1,
   },
   heroTitle: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: COLORS.onSurface,
-    letterSpacing: -1,
-    lineHeight: 42,
-    marginBottom: SPACING.md,
+    fontSize: 48,
+    fontWeight: '900',
+    color: COLORS.white,
+    letterSpacing: -1.5,
+    lineHeight: 52,
+    marginBottom: 16,
   },
-  heroHighlight: {
-    color: COLORS.primary,
+  heroHighlightText: {
+    color: COLORS.primaryLight,
     fontStyle: 'italic',
   },
   heroSubtitle: {
     fontSize: 16,
-    color: COLORS.onSurfaceVariant,
+    color: 'rgba(255,255,255,0.7)',
     lineHeight: 24,
-    marginBottom: SPACING.xxl,
+    marginBottom: 32,
+    maxWidth: '90%',
   },
-  heroImageContainer: {
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
-    marginBottom: SPACING.xxxl,
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+    marginBottom: 40,
+  },
+  statItem: {
+    gap: 2,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  statLabel: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '600',
+  },
+  statDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  actionCard: {
+    backgroundColor: COLORS.white,
+    marginHorizontal: SPACING.xl,
+    padding: 32,
+    borderRadius: RADIUS.xxl,
+    marginTop: -20,
     ...SHADOWS.lg,
   },
-  heroImage: {
-    width: '100%',
-    height: 250,
-  },
-  heroOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '60%',
-  },
-  heroCard: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    backgroundColor: COLORS.glass,
-    borderRadius: RADIUS.md,
-    padding: 16,
-    maxWidth: 200,
-  },
-  heroCardLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 3,
-    color: COLORS.primary,
-    marginBottom: 6,
-  },
-  heroCardText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.onSurface,
-    lineHeight: 17,
-  },
-  formContainer: {
-    backgroundColor: COLORS.surfaceLowest,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.xxl,
-    ...SHADOWS.md,
-  },
-  formTitle: {
-    fontSize: 28,
+  actionTitle: {
+    fontSize: 24,
     fontWeight: '800',
     color: COLORS.onSurface,
     marginBottom: 4,
+    textAlign: 'center',
   },
-  formSubtitle: {
+  actionSub: {
     fontSize: 14,
     color: COLORS.onSurfaceVariant,
-    marginBottom: SPACING.xxl,
+    textAlign: 'center',
+    marginBottom: 32,
   },
-  formFields: {
-    gap: SPACING.lg,
+  btnGroup: {
+    gap: 16,
   },
-  fieldGroup: {
+  loginBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
+    marginTop: 8,
   },
-  fieldLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2,
+  loginBtnText: {
+    fontSize: 14,
     color: COLORS.onSurfaceVariant,
-    marginLeft: 4,
-  },
-  textInput: {
-    backgroundColor: COLORS.surfaceLow,
-    borderRadius: RADIUS.md,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: COLORS.onSurface,
     fontWeight: '500',
   },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginVertical: 8,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: `${COLORS.outlineVariant}30`,
-  },
-  dividerText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 3,
-    color: `${COLORS.onSurfaceVariant}50`,
-  },
-  loginLink: {
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  loginLinkText: {
+  loginBtnLink: {
     fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.onSurface,
+    color: COLORS.primary,
+    fontWeight: '700',
   },
-  loginLinkBar: {
-    width: 32,
-    height: 2,
-    backgroundColor: COLORS.primary,
-    borderRadius: 1,
-  },
-  termsText: {
-    fontSize: 9,
-    color: `${COLORS.onSurfaceVariant}80`,
-    textTransform: 'uppercase',
-    letterSpacing: -0.3,
-    lineHeight: 14,
-    textAlign: 'center',
-    marginTop: SPACING.xxl,
-  },
-  footer: {
-    paddingVertical: SPACING.md,
-    alignItems: 'center',
-  },
-  footerText: {
+  copyright: {
     fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 3,
-    color: `${COLORS.onSurface}30`,
-    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center',
+    marginTop: 40,
+    letterSpacing: 2,
   },
 });

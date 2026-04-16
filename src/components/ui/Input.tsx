@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   TextInput,
@@ -14,13 +14,32 @@ interface InputProps extends TextInputProps {
   icon?: React.ReactNode;
   containerStyle?: ViewStyle;
   error?: string;
+  variant?: 'default' | 'filled' | 'outline';
 }
 
-export default function Input({ label, icon, containerStyle, error, style, ...props }: InputProps) {
+export default function Input({ label, icon, containerStyle, error, style, variant = 'default', ...props }: InputProps) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  const getVariantStyle = () => {
+    switch (variant) {
+      case 'outline':
+        return styles.inputOutline;
+      case 'filled':
+        return styles.inputFilled;
+      default:
+        return styles.inputDefault;
+    }
+  };
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <View style={[styles.inputWrapper, error && styles.inputError]}>
+      <View style={[
+        styles.inputWrapper, 
+        getVariantStyle(),
+        isFocused && styles.inputFocused,
+        error && styles.inputError
+      ]}>
         {icon && <View style={styles.iconContainer}>{icon}</View>}
         <TextInput
           style={[
@@ -28,6 +47,8 @@ export default function Input({ label, icon, containerStyle, error, style, ...pr
             icon ? { paddingLeft: 44 } : { paddingLeft: 16 },
             style,
           ]}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           placeholderTextColor={`${COLORS.onSurfaceVariant}60`}
           {...props}
         />
@@ -44,7 +65,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 2,
     color: COLORS.onSurfaceVariant,
@@ -52,27 +73,45 @@ const styles = StyleSheet.create({
   },
   inputWrapper: {
     position: 'relative',
-    backgroundColor: COLORS.surfaceLow,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.lg,
     overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    transition: 'all 0.2s ease-in-out',
+  },
+  inputDefault: {
+    backgroundColor: COLORS.surfaceLow,
+  },
+  inputFilled: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.03)',
+  },
+  inputOutline: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  inputFocused: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.white,
   },
   inputError: {
-    borderWidth: 1,
     borderColor: COLORS.error,
   },
   iconContainer: {
     position: 'absolute',
     left: 14,
     top: '50%',
-    transform: [{ translateY: -10 }],
+    marginTop: -10,
     zIndex: 1,
   },
   input: {
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingRight: 16,
     fontSize: 15,
     color: COLORS.onSurface,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   errorText: {
     fontSize: 11,

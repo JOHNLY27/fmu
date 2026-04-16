@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,201 +9,392 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ScrollView,
+  Dimensions,
+  Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
+import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import Button from '../components/ui/Button';
 import BarangaySelector from '../components/ui/BarangaySelector';
 import { createOrder } from '../services/orderService';
 import { useAuth } from '../context/AuthContext';
+
+const { width } = Dimensions.get('window');
+
+const sizes = [
+  { key: 'small', label: 'LITE', icon: 'document-text', desc: 'Docs, Keys, Parcels', price: 60 },
+  { key: 'medium', label: 'STANDARD', icon: 'cube', desc: 'Clothes, Gadgets', price: 100 },
+  { key: 'large', label: 'MAX', icon: 'archive', desc: 'Bulk, Appliances', price: 150 },
+];
 
 export default function ParcelDeliveryScreen({ navigation }: any) {
   const { user } = useAuth();
   const [pickup, setPickup] = useState('');
   const [dropoff, setDropoff] = useState('');
   const [itemDetails, setItemDetails] = useState('');
+  const [parcelSize, setParcelSize] = useState('small');
   const [isBooking, setIsBooking] = useState(false);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const currentPrice = sizes.find(s => s.key === parcelSize)?.price || 60;
 
   const handleSendParcel = async () => {
     if (!pickup || !dropoff || !itemDetails) {
-      Alert.alert('Missing Details', 'Please fill in pickup, dropoff, and item details.');
+      Alert.alert('Incomplete Logistics', 'Provide pickup, destination, and item specifications to initiate transit.');
       return;
     }
-    if (!user) {
-      Alert.alert('Error', 'You must be logged in to send a parcel.');
-      return;
-    }
-
     setIsBooking(true);
     try {
       const orderId = await createOrder({
-        userId: user.uid,
+        userId: user?.uid || '',
         type: 'parcel',
-        pickupLocation: `${pickup}, Butuan City`,
-        dropoffLocation: `${dropoff}, Butuan City`,
-        price: 15.00, // Flat rate for demo
-        itemDetails: itemDetails,
-        customerCity: user.location?.city || '',
-        customerProvince: user.location?.province || '',
+        pickupLocation: `${pickup}, Butuan`,
+        dropoffLocation: `${dropoff}, Butuan`,
+        price: currentPrice,
+        itemDetails: `Parcel Session: ${itemDetails} (${parcelSize.toUpperCase()})`,
+        customerCity: user?.location?.city || 'Butuan',
+        customerProvince: user?.location?.province || 'Agusan del Norte',
       });
-      setIsBooking(false);
       navigation.replace('TrackingDetail', { orderId });
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      Alert.alert('System Error', e.message);
+    } finally {
       setIsBooking(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Send Parcel</Text>
-        <View style={{ width: 40 }} />
+      {/* Immersive Logistics Header */}
+      <View style={styles.logisticsHero}>
+         <LinearGradient colors={['#0f1419', 'rgba(15,20,25,0.8)']} style={styles.heroOverlay} />
+         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+         </TouchableOpacity>
+         <View style={styles.heroContent}>
+            <View style={styles.secureBadge}>
+               <Ionicons name="shield-checkmark" size={14} color={COLORS.white} />
+               <Text style={styles.secureText}>SECURE TRANSIT READY</Text>
+            </View>
+            <Text style={styles.heroTitle}>Parcel Logistics</Text>
+            <Text style={styles.heroSub}>Fetch-and-Deliver missions across Butuan City</Text>
+         </View>
       </View>
 
-      <View style={styles.content}>
-        <Text style={styles.title}>What are we shipping today?</Text>
-        
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Ionicons name="cube-outline" size={20} color={COLORS.primary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="What's inside? (e.g. Documents, Keys)"
-              value={itemDetails}
-              onChangeText={setItemDetails}
-              placeholderTextColor={`${COLORS.onSurfaceVariant}80`}
-            />
-          </View>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            
+            <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+               
+               {/* Context Panel */}
+               <View style={styles.contextPanel}>
+                  <View style={styles.contextIcon}>
+                     <Ionicons name="cube" size={20} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                     <TextInput 
+                        style={styles.specInput}
+                        placeholder="SPECIFY CARGO (e.g. Legal Documents, Laptop)"
+                        placeholderTextColor="rgba(0,0,0,0.3)"
+                        value={itemDetails}
+                        onChangeText={setItemDetails}
+                     />
+                     <Text style={styles.contextSub}>Detailed cargo description ensures mission success</Text>
+                  </View>
+               </View>
 
-          <View style={{ marginTop: SPACING.md }}>
-            <BarangaySelector 
-              label="PICKUP LOCATION" 
-              value={pickup} 
-              onSelect={setPickup} 
-              placeholder="Select Pickup Barangay" 
-              icon="navigate"
-            />
-          </View>
+               {/* Logistics Tiers */}
+               <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>LOAD SPECIFICATIONS</Text>
+               </View>
+               <View style={styles.tierGrid}>
+                  {sizes.map((s) => (
+                     <TouchableOpacity 
+                        key={s.key} 
+                        style={[styles.tierCard, parcelSize === s.key && styles.activeTier]}
+                        onPress={() => setParcelSize(s.key)}
+                     >
+                        <Ionicons name={s.icon as any} size={28} color={parcelSize === s.key ? COLORS.white : 'rgba(0,0,0,0.2)'} />
+                        <Text style={[styles.tierLabel, parcelSize === s.key && { color: COLORS.white }]}>{s.label}</Text>
+                        <Text style={[styles.tierDesc, parcelSize === s.key && { color: 'rgba(255,255,255,0.6)' }]}>{s.desc}</Text>
+                        <Text style={[styles.tierPrice, parcelSize === s.key && { color: COLORS.white }]}>₱{s.price}</Text>
+                     </TouchableOpacity>
+                  ))}
+               </View>
 
-          <View style={{ marginTop: SPACING.md }}>
-            <BarangaySelector 
-              label="DROP-OFF LOCATION" 
-              value={dropoff} 
-              onSelect={setDropoff} 
-              placeholder="Where to send?" 
-              icon="location"
-            />
-          </View>
-        </View>
-      </View>
+               {/* Route Directives */}
+               <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>TRANSIT COORDINATES</Text>
+               </View>
+               <View style={styles.routeCard}>
+                  <View style={styles.routeVisual}>
+                     <View style={styles.routeDot} />
+                     <View style={styles.routeLine} />
+                     <Ionicons name="location" size={16} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1, gap: 16 }}>
+                     <BarangaySelector 
+                        value={pickup} 
+                        onSelect={setPickup} 
+                        placeholder="Origin (Pickup Point)" 
+                        variant="minimal"
+                     />
+                     <View style={styles.hDivider} />
+                     <BarangaySelector 
+                        value={dropoff} 
+                        onSelect={setDropoff} 
+                        placeholder="Destination (Dropoff)" 
+                        variant="minimal"
+                     />
+                  </View>
+               </View>
 
-      <View style={styles.footer}>
-        <View style={styles.priceContainer}>
-          <Text style={styles.priceLabel}>Estimated Cost</Text>
-          <Text style={styles.priceValue}>₱150.00</Text>
-        </View>
-        <Button 
-          title="Confirm Delivery" 
-          onPress={handleSendParcel} 
-          size="lg" 
-          loading={isBooking}
-          fullWidth 
-        />
-      </View>
-    </KeyboardAvoidingView>
+               {/* Summary Command */}
+               <View style={styles.summaryBox}>
+                  <View style={styles.sumRow}>
+                     <Text style={styles.sumLabel}>ESTIMATED LOGISTICS FEE</Text>
+                     <Text style={styles.sumVal}>₱{currentPrice.toFixed(2)}</Text>
+                  </View>
+                  <Button 
+                     title={isBooking ? "Executing Mission..." : "Initiate Dispatch"} 
+                     onPress={handleSendParcel}
+                     loading={isBooking}
+                     variant="primary"
+                     size="xl"
+                     fullWidth
+                  />
+                  <View style={styles.assuranceRow}>
+                     <Ionicons name="checkmark-circle" size={14} color={COLORS.tertiary} />
+                     <Text style={styles.assuranceText}>Real-time location telemetry enabled</Text>
+                  </View>
+               </View>
+
+            </Animated.View>
+         </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#F8F9FA',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xl,
-    paddingTop: 50,
-    paddingBottom: SPACING.md,
-    backgroundColor: COLORS.surface,
+  logisticsHero: {
+    height: 250,
+    width: '100%',
+    justifyContent: 'flex-end',
+    paddingBottom: 32,
+    backgroundColor: '#0f1419',
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surfaceHigh,
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  backBtn: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.onSurface,
+  heroContent: {
+    paddingHorizontal: 24,
   },
-  content: {
-    flex: 1,
-    padding: SPACING.xl,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: COLORS.onSurface,
-    marginBottom: SPACING.xxl,
-  },
-  form: {
-    gap: SPACING.lg,
-  },
-  inputGroup: {
+  secureBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceLowest,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.lg,
-    height: 56,
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  secureText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: COLORS.white,
+    letterSpacing: 1,
+  },
+  heroTitle: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: COLORS.white,
+    letterSpacing: -0.5,
+  },
+  heroSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 32,
+    paddingBottom: 60,
+  },
+  contextPanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    padding: 20,
+    borderRadius: 24,
+    gap: 16,
     ...SHADOWS.sm,
+    marginBottom: 32,
   },
-  inputIcon: {
-    marginRight: 12,
+  contextIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: `${COLORS.primary}10`,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
+  specInput: {
+    fontSize: 14,
+    fontWeight: '900',
     color: COLORS.onSurface,
+    height: 30,
   },
-  footer: {
-    padding: SPACING.xl,
-    paddingBottom: 40,
-    backgroundColor: COLORS.surfaceHighest,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
+  contextSub: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(0,0,0,0.3)',
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+  sectionHeader: {
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+    color: 'rgba(0,0,0,0.25)',
+  },
+  tierGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 32,
+  },
+  tierCard: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 16,
+    alignItems: 'center',
+    ...SHADOWS.sm,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  activeTier: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    ...SHADOWS.md,
+  },
+  tierLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: 'rgba(0,0,0,0.3)',
+    marginTop: 12,
+    letterSpacing: 1,
+  },
+  tierDesc: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.25)',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  tierPrice: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORS.primary,
+    marginTop: 10,
+  },
+  routeCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 24,
+    flexDirection: 'row',
+    gap: 20,
+    ...SHADOWS.sm,
+    marginBottom: 32,
+  },
+  routeVisual: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  routeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  routeLine: {
+    flex: 1,
+    width: 2,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    marginVertical: 4,
+  },
+  hDivider: {
+    height: 1,
+    backgroundColor: '#F8F9FA',
+  },
+  summaryBox: {
+    backgroundColor: '#0f1419',
+    borderRadius: 28,
+    padding: 24,
     ...SHADOWS.lg,
   },
-  priceContainer: {
+  sumRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.xl,
+    marginBottom: 20,
   },
-  priceLabel: {
-    fontSize: 14,
+  sumLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 1.5,
+  },
+  sumVal: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.white,
+  },
+  assuranceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
+  assuranceText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: COLORS.onSurfaceVariant,
-  },
-  priceValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.onSurface,
+    color: 'rgba(255,255,255,0.4)',
   },
 });

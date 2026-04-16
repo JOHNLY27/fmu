@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,9 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Animated,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,175 +17,176 @@ import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import Button from '../components/ui/Button';
 import { Order, subscribeToOrder } from '../services/orderService';
 
+const { width, height } = Dimensions.get('window');
+
 export default function TrackingScreen({ navigation, route }: any) {
   const { orderId } = route.params || {};
   const [order, setOrder] = useState<Order | null>(null);
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (!orderId) return;
     const unsubscribe = subscribeToOrder(orderId, (data) => {
       setOrder(data);
     });
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
+    ]).start();
+
+    // Pulse animation for the "Live" indicator
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.2, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+      ])
+    ).start();
+
     return () => unsubscribe();
   }, [orderId]);
 
-  const isPending = order?.status === 'pending';
-  const isAccepted = order?.status === 'accepted' || order?.status === 'picked_up';
-  const isCompleted = order?.status === 'completed';
+  const getStatusLabel = () => {
+    switch (order?.status) {
+      case 'pending': return 'SEARCHING FOR RUNNER';
+      case 'accepted': return 'MISSION CONFIRMED';
+      case 'picked_up': return 'EN-ROUTE TO YOU';
+      case 'completed': return 'MISSION SUCCESSFUL';
+      case 'cancelled': return 'MISSION ABORTED';
+      default: return 'TRACKING SESSION';
+    }
+  };
+
+  const currentStep = order?.status === 'pending' ? 0 : 
+                      order?.status === 'accepted' ? 1 :
+                      order?.status === 'picked_up' ? 2 : 3;
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
+      {/* Immersive Map Background */}
+      <View style={styles.mapContainer}>
+         <Image 
+          source={{ uri: 'https://images.unsplash.com/photo-1569336415962-a4bd9f6dfc0f?w=800&fit=crop' }} 
+          style={styles.mapImage} 
+         />
+         <LinearGradient
+          colors={['rgba(15,20,25,0.7)', 'transparent', 'rgba(15,20,25,0.4)', '#0f1419']}
+          style={styles.mapOverlay}
+         />
+         
+         <TouchableOpacity 
+          style={styles.backBtn} 
+          onPress={() => navigation.goBack()}
+         >
+            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+         </TouchableOpacity>
 
-      {/* Map Section */}
-      <View style={styles.mapSection}>
-        <Image
-          source={{ uri: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=600&h=500&fit=crop' }}
-          style={styles.mapImage}
-          resizeMode="cover"
-        />
-        {/* Back Button */}
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
-        </TouchableOpacity>
-
-        {/* Rider Info Card */}
-        <View style={styles.riderCard}>
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop' }}
-            style={styles.riderAvatar}
-          />
-          <View>
-            <Text style={styles.riderLabel}>{isPending ? 'SEARCHING...' : 'YOUR RUNNER'}</Text>
-            <Text style={styles.riderName}>{isPending ? 'Waiting for match' : 'Marcus J.'}</Text>
-          </View>
-          <View style={styles.riderBikeIcon}>
-            <Ionicons name="bicycle" size={16} color={COLORS.secondary} />
-          </View>
-        </View>
+         <View style={styles.floatingRunnerCard}>
+            <View style={styles.runnerAvatarBox}>
+               <Image 
+                source={{ uri: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&fit=crop' }} 
+                style={styles.runnerAvatar} 
+               />
+               <View style={styles.onlineBadge} />
+            </View>
+            <View>
+               <Text style={styles.runnerRole}>PREMIUM RUNNER</Text>
+               <Text style={styles.runnerName}>{order?.status === 'pending' ? 'Matching...' : 'Marcus J.'}</Text>
+            </View>
+            <TouchableOpacity style={styles.callBtn}>
+               <Ionicons name="call" size={18} color={COLORS.white} />
+            </TouchableOpacity>
+         </View>
       </View>
 
-      {/* Bottom Panel */}
-      <ScrollView
-        style={styles.panel}
+      {/* Control Panel */}
+      <Animated.ScrollView 
         showsVerticalScrollIndicator={false}
+        style={[styles.panel, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
         contentContainerStyle={styles.panelContent}
       >
-        <View style={styles.panelHandle} />
-
-        {/* Status Header */}
-        <View style={styles.statusHeader}>
-          <View>
-            <Text style={styles.statusTitle}>
-              {isPending ? 'Finding Rider...' : isCompleted ? 'Order Complete' : 'Heading to You'}
-            </Text>
-            <View style={styles.statusLive}>
-              <View style={styles.liveDot}>
-                <View style={styles.liveDotInner} />
-              </View>
-              <Text style={styles.statusEta}>
-                {isPending ? 'Locating...' : 'Arriving in 12 mins'}
-              </Text>
+         <View style={styles.panelHeader}>
+            <View style={styles.handle} />
+            <View style={styles.statusRow}>
+               <View>
+                  <Text style={styles.statusMain}>{getStatusLabel()}</Text>
+                  <View style={styles.liveIndicator}>
+                     <Animated.View style={[styles.pulseDot, { transform: [{ scale: pulseAnim }] }]} />
+                     <Text style={styles.liveText}>LIVE TELEMETRY</Text>
+                  </View>
+               </View>
+               <View style={styles.etaBox}>
+                  <Text style={styles.etaLabel}>EST. ARRIVAL</Text>
+                  <Text style={styles.etaTime}>{order?.status === 'completed' ? '--' : '15 MIN'}</Text>
+               </View>
             </View>
-          </View>
-          <View style={styles.orderId}>
-            <Text style={styles.orderIdLabel}>ORDER ID</Text>
-            <Text style={styles.orderIdValue}>
-              #{orderId ? orderId.substring(0, 6).toUpperCase() : 'VL-8829'}
-            </Text>
-          </View>
-        </View>
+         </View>
 
-        {/* Order Details Summary */}
-        <View style={styles.requestCard}>
-          <Text style={styles.requestLabel}>ROUTE SUMMARY</Text>
-          <View style={styles.routeRow}>
-            <View style={styles.routeIcon}>
-              <View style={[styles.routeDot, { backgroundColor: COLORS.secondary }]} />
-              <View style={styles.routeLine} />
-              <View style={[styles.routeDot, { backgroundColor: COLORS.primary }]} />
-            </View>
-            <View style={styles.routeText}>
-              <Text style={styles.locationTitle}>PICKUP</Text>
-              <Text style={styles.locationValue}>{order?.pickupLocation || 'Loading...'}</Text>
-              <View style={{ height: 16 }} />
-              <Text style={styles.locationTitle}>DROPOFF</Text>
-              <Text style={styles.locationValue}>{order?.dropoffLocation || 'Loading...'}</Text>
-            </View>
-          </View>
-          
-          <View style={[styles.requestTags, { marginTop: 16 }]}>
-            <View style={styles.tag}>
-              <Ionicons name="cube" size={12} color={COLORS.onSurfaceVariant} />
-              <Text style={styles.tagText}>{order?.type.toUpperCase()}</Text>
-            </View>
-            <View style={styles.tag}>
-              <Ionicons name="cash" size={12} color={COLORS.onSurfaceVariant} />
-              <Text style={styles.tagText}>${order?.price.toFixed(2)}</Text>
-            </View>
-          </View>
-        </View>
+         {/* Mission Progress */}
+         <View style={styles.progressSection}>
+            {[
+              { id: 0, label: 'Order Validated', sub: 'Coordinates received' },
+              { id: 1, label: 'Runner Assignment', sub: 'Marcus is en-route to pickup' },
+              { id: 2, label: 'En-Route', sub: 'Fetch in progress' },
+              { id: 3, label: 'Secured Delivery', sub: 'Handled with care' },
+            ].map((step, i) => (
+               <View key={i} style={styles.progressStep}>
+                  <View style={styles.stepIndicator}>
+                     <View style={[
+                        styles.stepDot, 
+                        currentStep >= step.id && styles.stepDotActive,
+                        currentStep === step.id && styles.stepDotCurrent
+                     ]} />
+                     {i < 3 && <View style={[styles.stepLine, currentStep > step.id && styles.stepLineActive]} />}
+                  </View>
+                  <View style={styles.stepText}>
+                     <Text style={[styles.stepLabel, currentStep >= step.id && styles.stepLabelActive]}>{step.label}</Text>
+                     <Text style={styles.stepSub}>{step.sub}</Text>
+                  </View>
+                  {currentStep > step.id && <Ionicons name="checkmark-circle" size={18} color={COLORS.primary} />}
+               </View>
+            ))}
+         </View>
 
-        {/* Progress Steps */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressLine} />
-          <View style={[styles.progressLineFill, { height: order?.status === 'completed' ? '100%' : order?.status === 'accepted' || order?.status === 'picked_up' ? '50%' : '0%' }]} />
-
-          {/* Step 1 - Requested */}
-          <View style={styles.step}>
-            <View style={[styles.stepDot, { backgroundColor: COLORS.secondary }]} />
-            <View style={styles.stepContent}>
-              <Text style={[styles.stepTitle, { color: COLORS.secondary }]}>Order Requested</Text>
-              <Text style={styles.stepMeta}>We are searching for a rider nearby</Text>
+         {/* Order Specification */}
+         <View style={styles.specCard}>
+            <View style={styles.specHeader}>
+               <Text style={styles.specTitle}>MISSION SPECIFICATION</Text>
+               <Text style={styles.specId}>ID: {orderId?.substring(0, 8).toUpperCase()}</Text>
             </View>
-            <Ionicons name="checkmark-circle" size={20} color={COLORS.tertiary} />
-          </View>
-
-          {/* Step 2 - Active */}
-          <View style={[styles.step, isPending && { opacity: 0.4 }]}>
-            <View style={[styles.stepDot, isAccepted || isCompleted ? styles.stepDotActive : { backgroundColor: COLORS.surfaceHigh }]} />
-            <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Rider En Route</Text>
-              <Text style={styles.stepMeta}>
-                {isPending ? 'Waiting for rider assignment' : isCompleted ? 'Rider arrived' : 'Marcus is picking up your items'}
-              </Text>
+            <View style={styles.specBody}>
+               <View style={styles.specItem}>
+                  <Text style={styles.specValue} numberOfLines={1}>{order?.pickupLocation || 'Loading...'}</Text>
+                  <Text style={styles.specLabel}>PICKUP POINT</Text>
+               </View>
+               <View style={styles.specDivider} />
+               <View style={styles.specItem}>
+                  <Text style={styles.specValue} numberOfLines={1}>{order?.dropoffLocation || 'Loading...'}</Text>
+                  <Text style={styles.specLabel}>DESTINATION</Text>
+               </View>
             </View>
-            {(isAccepted || isCompleted) && <Ionicons name="checkmark-circle" size={20} color={COLORS.tertiary} />}
-          </View>
+         </View>
 
-          {/* Step 3 - Pending */}
-          <View style={[styles.step, !isCompleted && { opacity: 0.4 }]}>
-            <View style={[styles.stepDot, isCompleted ? styles.stepDotActive : { backgroundColor: COLORS.surfaceHigh }]} />
-            <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Delivered</Text>
-              <Text style={styles.stepMeta}>{isCompleted ? 'Successfully delivered' : 'Pending delivery'}</Text>
-            </View>
-            {isCompleted && <Ionicons name="checkmark-circle" size={20} color={COLORS.tertiary} />}
-          </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionRow}>
-          <Button
-            title="Chat with Rider"
-            onPress={() => navigation.navigate('Chat', { orderId })}
-            size="md"
-            fullWidth
-            icon={<Ionicons name="chatbubble" size={18} color={COLORS.white} />}
-          />
-        </View>
-
-        <View style={styles.paymentCard}>
-          <View style={styles.visaBadge}>
-            <Text style={styles.visaText}>VISA</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.paymentLabel}>PAYMENT METHOD</Text>
-            <Text style={styles.paymentValue}>•••• 4412</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={`${COLORS.onSurface}30`} />
-        </View>
-      </ScrollView>
+         {/* Bottom Actions */}
+         <View style={styles.actions}>
+            <Button 
+               title="Secure Chat" 
+               onPress={() => navigation.navigate('Chat', { orderId })}
+               variant="primary"
+               size="xl"
+               fullWidth
+               icon={<Ionicons name="chatbubble-ellipses" size={20} color={COLORS.white} />}
+            />
+            <TouchableOpacity style={styles.supportLink}>
+               <Text style={styles.supportText}>Incident Report • Request Support</Text>
+            </TouchableOpacity>
+         </View>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -190,307 +194,273 @@ export default function TrackingScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#0f1419',
   },
-  mapSection: {
-    height: 300,
-    position: 'relative',
+  mapContainer: {
+    height: height * 0.5,
+    width: '100%',
   },
   mapImage: {
+    ...StyleSheet.absoluteFillObject,
     width: '100%',
     height: '100%',
-    opacity: 0.8,
   },
-  navButton: {
+  mapOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  backBtn: {
     position: 'absolute',
     top: 60,
-    right: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.surfaceLowest,
+    left: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
-    ...SHADOWS.lg,
   },
-  riderCard: {
+  floatingRunnerCard: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 60,
     left: 20,
+    right: 20,
+    backgroundColor: 'rgba(15,20,25,0.95)',
+    borderRadius: 24,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: `${COLORS.surfaceLowest}EE`,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: RADIUS.full,
+    gap: 16,
     ...SHADOWS.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  riderAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  runnerAvatarBox: {
+    position: 'relative',
+  },
+  runnerAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+  },
+  onlineBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.tertiary,
     borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderColor: '#0f1419',
   },
-  riderLabel: {
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: `${COLORS.primary}BB`,
+  runnerRole: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.primaryLight,
+    letterSpacing: 1,
+    marginBottom: 2,
   },
-  riderName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.onSurface,
+  runnerName: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORS.white,
   },
-  riderBikeIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: COLORS.secondaryContainer,
+  callBtn: {
+    marginLeft: 'auto',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   panel: {
     flex: 1,
-    marginTop: -20,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-    backgroundColor: COLORS.surface,
-    ...SHADOWS.lg,
+    marginTop: -40,
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
   },
   panelContent: {
-    padding: SPACING.xl,
-    paddingBottom: 100,
+    padding: 24,
+    paddingBottom: 60,
   },
-  panelHandle: {
-    width: 48,
+  panelHeader: {
+    marginBottom: 32,
+  },
+  handle: {
+    width: 40,
     height: 5,
     borderRadius: 3,
-    backgroundColor: `${COLORS.outlineVariant}40`,
+    backgroundColor: '#F1F3F5',
     alignSelf: 'center',
-    marginBottom: SPACING.xxl,
+    marginBottom: 24,
   },
-  statusHeader: {
+  statusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: SPACING.xxl,
   },
-  statusTitle: {
-    fontSize: 28,
-    fontWeight: '800',
+  statusMain: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0f1419',
     letterSpacing: -0.5,
-    color: COLORS.onSurface,
-    marginBottom: 6,
+    lineHeight: 26,
   },
-  statusLive: {
+  liveIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginTop: 8,
   },
-  liveDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: `${COLORS.primary}30`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  liveDotInner: {
+  pulseDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: COLORS.primary,
   },
-  statusEta: {
-    fontSize: 14,
-    fontWeight: '700',
+  liveText: {
+    fontSize: 10,
+    fontWeight: '800',
     color: COLORS.primary,
+    letterSpacing: 1,
   },
-  orderId: {
+  etaBox: {
     alignItems: 'flex-end',
   },
-  orderIdLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: `${COLORS.onSurface}50`,
-    marginBottom: 2,
+  etaLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.3)',
+    letterSpacing: 0.5,
   },
-  orderIdValue: {
-    fontSize: 14,
-    fontWeight: '700',
+  etaTime: {
+    fontSize: 24,
+    fontWeight: '900',
     color: COLORS.onSurface,
-    fontFamily: 'monospace',
   },
-  requestCard: {
-    backgroundColor: COLORS.surfaceLow,
-    padding: SPACING.xl,
-    borderRadius: RADIUS.lg,
-    marginBottom: SPACING.xxl,
+  progressSection: {
+    marginBottom: 32,
+    gap: 20,
   },
-  requestLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-    color: `${COLORS.onSurface}80`,
-    marginBottom: 10,
-  },
-  requestText: {
-    fontSize: 15,
-    fontWeight: '500',
-    lineHeight: 22,
-    color: COLORS.onSurface,
-    marginBottom: 14,
-  },
-  requestTags: {
+  progressStep: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'flex-start',
+    gap: 16,
   },
-  tag: {
-    flexDirection: 'row',
+  stepIndicator: {
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.surfaceHighest,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: RADIUS.full,
-  },
-  tagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.onSurfaceVariant,
-  },
-  progressContainer: {
-    paddingLeft: 16,
-    marginBottom: SPACING.xxl,
-    position: 'relative',
-    gap: SPACING.xxl,
-  },
-  progressLine: {
-    position: 'absolute',
-    left: 20,
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 2,
-  },
-  progressLineFill: {
-    position: 'absolute',
-    left: 20,
-    top: 0,
-    width: 3,
-    backgroundColor: COLORS.secondary,
-    borderRadius: 2,
-  },
-  step: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.lg,
+    width: 12,
   },
   stepDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 3,
-    borderColor: COLORS.surface,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F1F3F5',
     zIndex: 1,
   },
   stepDotActive: {
-    backgroundColor: COLORS.secondary,
-    borderWidth: 3,
-    borderColor: COLORS.surface,
-    shadowColor: COLORS.secondary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 6,
+    backgroundColor: COLORS.primary,
   },
-  stepContent: {
+  stepDotCurrent: {
+    borderWidth: 3,
+    borderColor: '#F8F9FA',
+    transform: [{ scale: 1.4 }],
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+  },
+  stepLine: {
+    width: 2,
+    height: 30,
+    backgroundColor: '#F1F3F5',
+    marginTop: 4,
+    marginBottom: -16,
+  },
+  stepLineActive: {
+    backgroundColor: COLORS.primary,
+  },
+  stepText: {
     flex: 1,
   },
-  stepTitle: {
+  stepLabel: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.2)',
+  },
+  stepLabelActive: {
     color: COLORS.onSurface,
   },
-  stepMeta: {
+  stepSub: {
     fontSize: 11,
-    color: `${COLORS.onSurface}80`,
+    color: 'rgba(0,0,0,0.4)',
     marginTop: 2,
+    fontWeight: '500',
   },
-  actionRow: {
-    marginBottom: SPACING.lg,
+  specCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 40,
+    borderWidth: 1,
+    borderColor: '#F1F3F5',
   },
-  paymentCard: {
+  specHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    backgroundColor: COLORS.surfaceLow,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg,
-    borderRadius: RADIUS.full,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  visaBadge: {
-    width: 40,
-    height: 24,
-    borderRadius: 4,
-    backgroundColor: COLORS.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  specTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    color: 'rgba(0,0,0,0.3)',
   },
-  visaText: {
+  specId: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.primary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  specBody: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  specItem: {
+    flex: 1,
+  },
+  specValue: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: COLORS.onSurface,
+  },
+  specLabel: {
     fontSize: 8,
     fontWeight: '800',
-    color: COLORS.white,
-    letterSpacing: 1,
+    color: 'rgba(0,0,0,0.4)',
+    marginTop: 4,
+    letterSpacing: 0.5,
   },
-  paymentLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: `${COLORS.onSurface}50`,
+  specDivider: {
+    width: 1,
+    height: '60%',
+    alignSelf: 'center',
+    backgroundColor: '#E9ECEF',
+    marginHorizontal: 16,
   },
-  paymentValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  routeRow: {
-    flexDirection: 'row',
+  actions: {
     gap: 16,
-  },
-  routeIcon: {
     alignItems: 'center',
-    paddingVertical: 4,
   },
-  routeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  supportLink: {
+    paddingVertical: 12,
   },
-  routeLine: {
-    width: 2,
-    flex: 1,
-    backgroundColor: `${COLORS.outlineVariant}40`,
-    marginVertical: 4,
-  },
-  routeText: {
-    flex: 1,
-  },
-  locationTitle: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 1,
-    color: COLORS.onSurfaceVariant,
-    marginBottom: 2,
-  },
-  locationValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.onSurface,
+  supportText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.25)',
+    letterSpacing: 0.5,
   },
 });

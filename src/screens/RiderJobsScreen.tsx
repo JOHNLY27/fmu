@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   StatusBar,
   Alert,
+  Animated,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
@@ -14,22 +17,32 @@ import { useAuth } from '../context/AuthContext';
 import { subscribeToRiderJobs, updateOrderStatus, Order } from '../services/orderService';
 import Button from '../components/ui/Button';
 
+const { width } = Dimensions.get('window');
+
 export default function RiderJobsScreen({ navigation }: any) {
   const { user } = useAuth();
   const [jobs, setJobs] = useState<Order[]>([]);
   const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(10)).current;
 
   useEffect(() => {
     if (!user?.uid) return;
     const unsubscribe = subscribeToRiderJobs(user.uid, (data) => {
       setJobs(data);
     });
+    
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+    ]).start();
+
     return () => unsubscribe();
   }, [user]);
 
   const activeJobs = jobs.filter(j => ['accepted', 'picked_up'].includes(j.status));
   const completedJobs = jobs.filter(j => j.status === 'completed');
-
   const displayedJobs = activeTab === 'active' ? activeJobs : completedJobs;
 
   const handleUpdateStatus = (job: Order) => {
@@ -41,17 +54,17 @@ export default function RiderJobsScreen({ navigation }: any) {
     }
 
     Alert.alert(
-      "Update Order Status",
+      "Update Assignment Status",
       prompt,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Not Yet", style: "cancel" },
         { 
-          text: "Yes, Update", 
+          text: "Confirm Status Update", 
           onPress: async () => {
             try {
               await updateOrderStatus(job.id!, nextStatus);
             } catch (e) {
-              Alert.alert("Error", "Could not update status.");
+              Alert.alert("Error", "Could not synchronize with cloud.");
             }
           }
         }
@@ -61,128 +74,172 @@ export default function RiderJobsScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
+      <StatusBar barStyle="dark-content" translucent={false} backgroundColor={COLORS.surface} />
       
-      {/* Header */}
+      {/* Premium Header */}
       <View style={styles.header}>
-        <Text style={styles.headerLabel}>YOUR ASSIGNMENTS</Text>
-        <Text style={styles.headerTitle}>My Jobs</Text>
+        <View>
+          <Text style={styles.headerLabel}>ASSIGNMENT TRACKER</Text>
+          <Text style={styles.headerTitle}>My Missions</Text>
+        </View>
+        <TouchableOpacity style={styles.historyBtn} onPress={() => setActiveTab(activeTab === 'active' ? 'completed' : 'active')}>
+          <Ionicons 
+            name={activeTab === 'active' ? "time-outline" : "flash-outline"} 
+            size={22} 
+            color={COLORS.primary} 
+          />
+        </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
+      {/* Pill Tabs */}
+      <View style={styles.tabWrapper}>
         <TouchableOpacity 
-          style={[styles.tab, activeTab === 'active' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'active' && styles.activeTab]}
           onPress={() => setActiveTab('active')}
         >
-          <Text style={[styles.tabText, activeTab === 'active' && styles.tabTextActive]}>
-            Active ({activeJobs.length})
+          <Text style={[styles.tabText, activeTab === 'active' && styles.activeTabText]}>
+            In Progress ({activeJobs.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.tab, activeTab === 'completed' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
           onPress={() => setActiveTab('completed')}
         >
-          <Text style={[styles.tabText, activeTab === 'completed' && styles.tabTextActive]}>
-            Completed History
+          <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
+            Completed
           </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {displayedJobs.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name={activeTab === 'active' ? "bicycle-outline" : "checkmark-done-circle-outline"} size={48} color={`${COLORS.onSurfaceVariant}40`} />
-            <Text style={styles.emptyTitle}>
-              {activeTab === 'active' ? "No active jobs" : "No completed jobs yet"}
-            </Text>
-            <Text style={styles.emptyDesc}>
-              {activeTab === 'active' 
-                ? "Go to the Dashboard to accept new incoming requests near you." 
-                : "Your delivered orders will appear here over time."}
-            </Text>
-            {activeTab === 'active' && (
-              <Button 
-                title="Find Jobs on Dashboard" 
-                onPress={() => navigation.navigate('Dashboard')} 
-                style={{ marginTop: SPACING.md }}
-              />
-            )}
-          </View>
-        )}
-
-        {displayedJobs.map(job => (
-          <View key={job.id} style={styles.jobCard}>
-            <View style={styles.jobHeader}>
-              <View>
-                <Text style={styles.jobTitle}>
-                  {job.type === 'pabili' ? '🛍️ Pabili Request' : 
-                   job.type === 'food' ? '🍽️ Food Delivery' : 
-                   job.type === 'parcel' ? '📦 Parcel Delivery' : '🚗 Ride Request'}
-                </Text>
-                <Text style={styles.jobTime}>
-                  Order #{job.id?.substring(0,6).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.priceTag}>
-                <Text style={styles.priceText}>₱{job.price?.toFixed(2)}</Text>
-              </View>
-            </View>
-
-            <View style={styles.locations}>
-              <View style={styles.locRow}>
-                <Ionicons name="storefront" size={14} color={COLORS.secondary} />
-                <Text style={styles.locText}><Text style={styles.boldText}>Pickup:</Text> {job.pickupLocation}</Text>
-              </View>
-              <View style={styles.locRow}>
-                <Ionicons name="home" size={14} color={COLORS.primary} />
-                <Text style={styles.locText}><Text style={styles.boldText}>Dropoff:</Text> {job.dropoffLocation}</Text>
-              </View>
-            </View>
-
-            {job.itemDetails && (
-              <View style={styles.itemsBox}>
-                <Text style={styles.itemsBoxLabel}>Customer Order / Items:</Text>
-                <Text style={styles.itemsBoxText}>{job.itemDetails}</Text>
-              </View>
-            )}
-
-            {/* Rider Controls */}
-            {activeTab === 'active' && (
-              <View style={styles.controls}>
-                {/* Chat and Call block */}
-                <View style={styles.actionRow}>
-                  <TouchableOpacity 
-                    style={styles.actionBtn}
-                    onPress={() => navigation.navigate('Chat', { orderId: job.id })}
-                  >
-                    <Ionicons name="chatbubbles" size={16} color={COLORS.secondary} />
-                    <Text style={styles.actionBtnText}>Chat Customer</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionBtn}>
-                    <Ionicons name="call" size={16} color={COLORS.primary} />
-                    <Text style={[styles.actionBtnText, { color: COLORS.primary }]}>Call</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Status Update */}
-                <Button 
-                  title={job.status === 'accepted' ? "Mark as Picked Up" : "Mark as Delivered"}
-                  onPress={() => handleUpdateStatus(job)}
-                  size="md"
-                  fullWidth
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+      >
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          {displayedJobs.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconCircle}>
+                 <Ionicons 
+                  name={activeTab === 'active' ? "bicycle-outline" : "checkmark-done-circle-outline"} 
+                  size={42} 
+                  color={COLORS.primary} 
                 />
               </View>
-            )}
+              <Text style={styles.emptyTitle}>
+                {activeTab === 'active' ? "No Missions Assigned" : "History Empty"}
+              </Text>
+              <Text style={styles.emptySub}>
+                {activeTab === 'active' 
+                  ? "Return to the Dashboard to scout for available missions near your location." 
+                  : "All your successfully delivered missions will be archived here."}
+              </Text>
+              {activeTab === 'active' && (
+                <Button 
+                  title="Check Mission Pool" 
+                  onPress={() => navigation.navigate('Dashboard')} 
+                  size="md"
+                  style={{ marginTop: 24 }}
+                  variant="primary"
+                />
+              )}
+            </View>
+          ) : (
+            displayedJobs.map(job => (
+              <View key={job.id} style={styles.missionCard}>
+                {/* ID and Status Indicator */}
+                <View style={styles.cardHeader}>
+                  <View style={styles.idBadge}>
+                    <Text style={styles.idText}>MISSION #{job.id?.substring(0, 8).toUpperCase()}</Text>
+                  </View>
+                  <View style={[
+                    styles.statusBadge, 
+                    job.status === 'completed' ? styles.statusCompleted : styles.statusActive
+                  ]}>
+                    <View style={[
+                      styles.statusDot, 
+                      job.status === 'completed' ? { backgroundColor: COLORS.tertiary } : { backgroundColor: COLORS.primary }
+                    ]} />
+                    <Text style={[
+                      styles.statusText,
+                      job.status === 'completed' ? { color: COLORS.tertiary } : { color: COLORS.primary }
+                    ]}>
+                      {job.status?.replace('_', ' ').toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
 
-            {activeTab === 'completed' && (
-              <View style={styles.completedBadge}>
-                <Ionicons name="checkmark-circle" size={16} color={COLORS.tertiary} />
-                <Text style={styles.completedText}>Successfully Delivered</Text>
+                {/* Vertical Route Logic */}
+                <View style={styles.missionBody}>
+                   <View style={styles.routeContainer}>
+                      <View style={styles.routeLineBox}>
+                        <View style={styles.routeStart} />
+                        <View style={styles.routeLine} />
+                        <Ionicons name="location" size={16} color={COLORS.primary} />
+                      </View>
+                      <View style={styles.routeInfo}>
+                        <View>
+                          <Text style={styles.routeLabel}>PICKUP FROM</Text>
+                          <Text style={styles.routeText} numberOfLines={1}>{job.pickupLocation}</Text>
+                        </View>
+                        <View style={{ marginTop: 20 }}>
+                          <Text style={styles.routeLabel}>DELIVER TO</Text>
+                          <Text style={styles.routeText} numberOfLines={1}>{job.dropoffLocation}</Text>
+                        </View>
+                      </View>
+                   </View>
+
+                   {job.itemDetails && (
+                      <View style={styles.detailsBox}>
+                         <Ionicons name="information-circle-outline" size={14} color={COLORS.onSurfaceVariant} />
+                         <Text style={styles.detailsText} numberOfLines={2}>"{job.itemDetails}"</Text>
+                      </View>
+                   )}
+
+                   <View style={styles.divider} />
+
+                   <View style={styles.cardFooter}>
+                      <View>
+                         <Text style={styles.footerLabel}>EXPECTED EARNINGS</Text>
+                         <Text style={styles.footerPrice}>₱{job.price?.toFixed(2)}</Text>
+                      </View>
+
+                      {activeTab === 'active' && (
+                        <View style={styles.actionGroup}>
+                          <TouchableOpacity 
+                            style={styles.chatBtn}
+                            onPress={() => navigation.navigate('Chat', { orderId: job.id })}
+                          >
+                            <Ionicons name="chatbubble-ellipses" size={20} color={COLORS.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={styles.mapBtn}
+                            onPress={() => navigation.navigate('TrackingDetail', { orderId: job.id })}
+                          >
+                             <Ionicons name="navigate-circle" size={24} color={COLORS.white} />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                   </View>
+
+                   {activeTab === 'active' && (
+                     <TouchableOpacity 
+                       style={[
+                         styles.mainStatusBtn,
+                         job.status === 'picked_up' && styles.mainStatusBtnAlt
+                       ]}
+                       onPress={() => handleUpdateStatus(job)}
+                     >
+                        <Text style={styles.mainStatusText}>
+                          {job.status === 'accepted' ? 'PICKED UP ORDER' : 'MARK AS DELIVERED'}
+                        </Text>
+                        <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
+                     </TouchableOpacity>
+                   )}
+                </View>
               </View>
-            )}
-          </View>
-        ))}
+            ))
+          )}
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -191,186 +248,265 @@ export default function RiderJobsScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#F8F9FA',
   },
   header: {
-    paddingHorizontal: SPACING.xl,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
     paddingTop: 54,
-    paddingBottom: SPACING.md,
+    paddingBottom: 24,
+    backgroundColor: COLORS.white,
   },
   headerLabel: {
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 2,
     color: COLORS.primary,
+    marginBottom: 4,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '900',
     color: COLORS.onSurface,
-    letterSpacing: -0.5,
+    letterSpacing: -1,
   },
-  tabContainer: {
+  historyBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  tabWrapper: {
     flexDirection: 'row',
-    paddingHorizontal: SPACING.xl,
-    marginBottom: SPACING.md,
+    marginHorizontal: 24,
+    backgroundColor: '#E9ECEF',
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 24,
   },
   tab: {
     flex: 1,
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: 'center',
   },
-  tabActive: {
-    borderBottomColor: COLORS.primary,
+  activeTab: {
+    backgroundColor: COLORS.white,
+    ...SHADOWS.sm,
   },
   tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.onSurfaceVariant,
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(0,0,0,0.4)',
   },
-  tabTextActive: {
+  activeTabText: {
     color: COLORS.primary,
-    fontWeight: '800',
   },
   scrollContent: {
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
-  emptyState: {
-    paddingVertical: 60,
+  emptyContainer: {
     alignItems: 'center',
+    paddingVertical: 80,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: `${COLORS.primary}10`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: COLORS.onSurface,
-    marginTop: 10,
+    marginBottom: 8,
   },
-  emptyDesc: {
+  emptySub: {
     fontSize: 13,
     color: COLORS.onSurfaceVariant,
     textAlign: 'center',
-    paddingHorizontal: 20,
-    marginTop: 5,
+    maxWidth: '85%',
     lineHeight: 20,
+    fontWeight: '500',
   },
-  jobCard: {
-    backgroundColor: COLORS.surfaceLowest,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
-    ...SHADOWS.sm,
-    borderWidth: 1,
-    borderColor: `${COLORS.outlineVariant}20`,
+  missionCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    marginBottom: 16,
+    overflow: 'hidden',
+    ...SHADOWS.md,
   },
-  jobHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: SPACING.md,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F3F5',
   },
-  jobTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.onSurface,
-  },
-  jobTime: {
-    fontSize: 11,
-    color: COLORS.onSurfaceVariant,
-    marginTop: 2,
-    fontFamily: 'monospace',
-  },
-  priceTag: {
-    backgroundColor: `${COLORS.primary}12`,
-    paddingHorizontal: 8,
+  idBadge: {
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: RADIUS.sm,
+    borderRadius: 8,
   },
-  priceText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: COLORS.primary,
-  },
-  locations: {
-    gap: 6,
-    marginBottom: SPACING.md,
-  },
-  locRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  locText: {
-    fontSize: 13,
-    color: COLORS.onSurfaceVariant,
-    flex: 1,
-    lineHeight: 18,
-  },
-  boldText: {
+  idText: {
+    fontSize: 10,
     fontWeight: '700',
-    color: COLORS.onSurface,
+    color: COLORS.onSurfaceVariant,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  itemsBox: {
-    backgroundColor: `${COLORS.secondary}10`,
-    padding: SPACING.md,
-    borderRadius: RADIUS.sm,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.secondary,
-    marginBottom: SPACING.md,
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  itemsBoxLabel: {
+  statusActive: {
+    backgroundColor: `${COLORS.primary}10`,
+  },
+  statusCompleted: {
+    backgroundColor: `${COLORS.tertiary}10`,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
     fontSize: 10,
     fontWeight: '800',
-    color: COLORS.secondary,
-    marginBottom: 4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  itemsBoxText: {
-    fontSize: 13,
-    color: COLORS.onSurfaceVariant,
-    lineHeight: 18,
-    fontStyle: 'italic',
+  missionBody: {
+    padding: 20,
   },
-  controls: {
-    borderTopWidth: 1,
-    borderTopColor: `${COLORS.outlineVariant}15`,
-    paddingTop: SPACING.md,
-  },
-  actionRow: {
+  routeContainer: {
     flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
+    gap: 16,
+    marginBottom: 20,
   },
-  actionBtn: {
+  routeLineBox: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  routeStart: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  routeLine: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    backgroundColor: `${COLORS.surfaceHigh}`,
-    borderRadius: RADIUS.full,
+    width: 2,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    marginVertical: 4,
   },
-  actionBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.secondary,
+  routeInfo: {
+    flex: 1,
   },
-  completedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: `${COLORS.tertiary}12`,
-    paddingVertical: 10,
-    borderRadius: RADIUS.full,
-    marginTop: SPACING.sm,
-  },
-  completedText: {
-    fontSize: 13,
+  routeLabel: {
+    fontSize: 9,
     fontWeight: '800',
-    color: COLORS.tertiary,
+    color: COLORS.onSurfaceVariant,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  routeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.onSurface,
+  },
+  detailsBox: {
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailsText: {
+    fontSize: 12,
+    color: COLORS.onSurfaceVariant,
+    fontStyle: 'italic',
+    lineHeight: 18,
+    flex: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F3F5',
+    marginVertical: 20,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 20,
+  },
+  footerLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.onSurfaceVariant,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  footerPrice: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: COLORS.onSurface,
+  },
+  actionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  chatBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: `${COLORS.primary}10`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.onSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.sm,
+  },
+  mainStatusBtn: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 16,
+    ...SHADOWS.md,
+  },
+  mainStatusBtnAlt: {
+    backgroundColor: COLORS.tertiary,
+  },
+  mainStatusText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: COLORS.white,
+    letterSpacing: 1,
   },
 });

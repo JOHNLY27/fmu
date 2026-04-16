@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
@@ -63,18 +64,32 @@ export default function ChatScreen({ navigation, route }: any) {
     return () => unsubscribe();
   }, [orderId, user]);
 
-  const handleSend = async (text: string) => {
-    if (!text.trim() || !user) return;
+  const handleSend = async (text: string, imageUrl?: string) => {
+    if ((!text.trim() && !imageUrl) || !user) return;
     if (!orderId) {
       Alert.alert('Missing Order ID', 'You need to book a ride or have an active delivery to chat!');
       return;
     }
     try {
-      await sendMessage(orderId, user.uid, text.trim());
+      await sendMessage(orderId, user.uid, text.trim(), imageUrl);
       setMessage('');
     } catch (e) {
       console.log(e);
     }
+  };
+
+  const handleSendPhoto = () => {
+    // Simulate taking/picking a photo and sending it
+    const demoImageUrl = `https://images.unsplash.com/photo-1555529733-0e670560f8e1?w=400&h=300&fit=crop&q=80&timestamp=${new Date().getTime()}`;
+    handleSend('📷 Photo attachment', demoImageUrl);
+  };
+
+  const handleSendLocation = () => {
+    // Simulate getting device GPS then sending Google Maps link
+    const lat = 8.9475 + (Math.random() * 0.01);
+    const lng = 125.5406 + (Math.random() * 0.01);
+    const gmapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(5)},${lng.toFixed(5)}`;
+    handleSend(`📍 Shared Location\n${gmapsUrl}`);
   };
 
   return (
@@ -108,10 +123,10 @@ export default function ChatScreen({ navigation, route }: any) {
           </View>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerBtn}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.navigate('GenericContent', { title: 'Call Partner' })}>
             <Ionicons name="call" size={20} color={COLORS.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.navigate('GenericContent', { title: 'Chat Options' })}>
             <Ionicons name="ellipsis-vertical" size={20} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
@@ -139,9 +154,30 @@ export default function ChatScreen({ navigation, route }: any) {
           return (
             <View key={msg.id || idx} style={[styles.messageRow, isOutgoing ? styles.outgoingRow : null]}>
               <View style={isOutgoing ? styles.outgoingBubble : styles.incomingBubble}>
-                <Text style={isOutgoing ? styles.outgoingText : styles.incomingText}>
-                  {msg.text}
-                </Text>
+                {msg.imageUrl && (
+                  <Image 
+                    source={{ uri: msg.imageUrl }} 
+                    style={[styles.messageImage, { marginBottom: msg.text ? 8 : 0 }]} 
+                    resizeMode="cover"
+                  />
+                )}
+                {msg.text ? (
+                  msg.text.includes('google.com/maps') ? (
+                    <TouchableOpacity onPress={() => Linking.openURL(msg.text.split('\n')[1])} style={styles.locationMsgContainer}>
+                       <Ionicons name="map" size={32} color={isOutgoing ? COLORS.white : COLORS.primary} style={{ marginBottom: 4 }} />
+                       <Text style={[isOutgoing ? styles.outgoingText : styles.incomingText, { fontWeight: '700' }]}>
+                         {msg.text.split('\n')[0]}
+                       </Text>
+                       <Text style={[isOutgoing ? styles.outgoingText : styles.incomingText, { fontSize: 10, textDecorationLine: 'underline', marginTop: 4 }]}>
+                         Tap to open in Maps
+                       </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={isOutgoing ? styles.outgoingText : styles.incomingText}>
+                      {msg.text}
+                    </Text>
+                  )
+                ) : null}
               </View>
             </View>
           );
@@ -164,10 +200,10 @@ export default function ChatScreen({ navigation, route }: any) {
       {/* Input Bar */}
       <View style={styles.inputBar}>
         <View style={styles.inputActions}>
-          <TouchableOpacity style={styles.inputActionBtn}>
-            <Ionicons name="add-circle" size={26} color={COLORS.primary} />
+          <TouchableOpacity style={styles.inputActionBtn} onPress={handleSendLocation}>
+            <Ionicons name="location" size={26} color={COLORS.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.inputActionBtn}>
+          <TouchableOpacity style={styles.inputActionBtn} onPress={handleSendPhoto}>
             <Ionicons name="camera" size={26} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
@@ -321,6 +357,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 160,
     borderRadius: RADIUS.md,
+  },
+  locationMsgContainer: {
+    alignItems: 'center',
+    padding: 8,
   },
   timestamp: {
     fontSize: 9,

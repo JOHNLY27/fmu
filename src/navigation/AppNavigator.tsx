@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../constants/theme';
+import { useAuth } from '../context/AuthContext';
 
 // Screens
 import LandingScreen from '../screens/LandingScreen';
@@ -87,40 +88,76 @@ function RiderTabs() {
   );
 }
 
+export const navigationRef = createNavigationContainerRef();
+
 export default function AppNavigator() {
+  const { user, loading } = useAuth();
+
+  // Simple loading placeholder while auth state resolves
+  if (loading) return null;
+
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: COLORS.surface },
-          animation: 'slide_from_right',
-        }}
-        initialRouteName="Landing"
-      >
-        {/* Auth Flow */}
-        <Stack.Screen name="Landing" component={LandingScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        
-        {/* Main User Flow */}
-        <Stack.Screen name="MainTabs" component={UserTabs} />
-        <Stack.Screen name="FoodDelivery" component={FoodDeliveryScreen} />
-        <Stack.Screen name="RideSelection" component={RideSelectionScreen} />
-        <Stack.Screen name="ParcelDelivery" component={ParcelDeliveryScreen} />
-        <Stack.Screen name="TrackingDetail" component={TrackingScreen} />
-        <Stack.Screen name="Chat" component={ChatScreen} />
-        <Stack.Screen name="StoreDirectory" component={StoreDirectoryScreen} />
-        <Stack.Screen name="PabiliOrder" component={PabiliOrderScreen} />
-        
-        {/* Rider Flow */}
-        <Stack.Screen name="RiderPortal" component={RiderPortalScreen} />
-        <Stack.Screen name="RiderTabs" component={RiderTabs} />
-        <Stack.Screen name="RiderDashboard" component={RiderDashboardScreen} />
-        
-        {/* Universal Sub-Screens */}
-        <Stack.Screen name="AddressEdit" component={AddressEditScreen} />
-        <Stack.Screen name="GenericContent" component={GenericContentScreen} />
-      </Stack.Navigator>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => {
+        try {
+          console.log('Navigation ready ->', navigationRef.getCurrentRoute?.()?.name);
+        } catch (e) {
+          console.log('Navigation ready (error)', e);
+        }
+      }}
+      onStateChange={() => {
+        try {
+          console.log('Navigation state ->', navigationRef.getCurrentRoute?.()?.name);
+        } catch (e) {
+          console.log('Navigation state (error)', e);
+        }
+      }}
+    >
+      {user ? (
+        // Authenticated app stack
+        <Stack.Navigator
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: COLORS.surface },
+            animation: 'slide_from_right',
+          }}
+        >
+          {user.role === 'rider' ? (
+            <>
+              <Stack.Screen name="RiderTabs" component={RiderTabs} />
+              <Stack.Screen name="RiderDashboard" component={RiderDashboardScreen} />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="MainTabs" component={UserTabs} />
+              <Stack.Screen name="FoodDelivery" component={FoodDeliveryScreen} />
+              <Stack.Screen name="RideSelection" component={RideSelectionScreen} />
+              <Stack.Screen name="ParcelDelivery" component={ParcelDeliveryScreen} />
+            </>
+          )}
+
+          {/* Universal Sub-Screens (Accessible to both Users and Riders) */}
+          <Stack.Screen name="TrackingDetail" component={TrackingScreen} />
+          <Stack.Screen name="Chat" component={ChatScreen} />
+          <Stack.Screen name="StoreDirectory" component={StoreDirectoryScreen} />
+          <Stack.Screen name="PabiliOrder" component={PabiliOrderScreen} />
+          <Stack.Screen name="AddressEdit" component={AddressEditScreen} />
+          <Stack.Screen name="GenericContent" component={GenericContentScreen} />
+        </Stack.Navigator>
+      ) : (
+        // Unauthenticated / auth flow
+        <Stack.Navigator
+          screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.surface } }}
+          initialRouteName="Landing"
+        >
+          <Stack.Screen name="Landing" component={LandingScreen} />
+          {/* alias to handle lowercase or external resets that target 'landing' */}
+          <Stack.Screen name="landing" component={LandingScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="RiderPortal" component={RiderPortalScreen} />
+        </Stack.Navigator>
+      )}
     </NavigationContainer>
   );
 }

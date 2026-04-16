@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,21 @@ import {
   TouchableOpacity,
   StatusBar,
   Alert,
+  Animated,
+  Dimensions,
+  Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { useAuth } from '../context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+import { uploadImage } from '../services/storageService';
+
+const { width } = Dimensions.get('window');
 
 export default function RiderPortalScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -27,252 +36,228 @@ export default function RiderPortalScreen({ navigation }: any) {
   const [licenseNumber, setLicenseNumber] = useState('');
   const [vehiclePlateNumber, setVehiclePlateNumber] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [licenseImage, setLicenseImage] = useState<string | null>(null);
+  const [plateImage, setPlateImage] = useState<string | null>(null);
   const { signIn, signUp } = useAuth();
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  // Load saved rider email if rememberMe was previously active
+  useEffect(() => {
+    const loadSavedRiderEmail = async () => {
+      try {
+        const savedEmail = await AsyncStorage.getItem('saved_rider_email');
+        if (savedEmail) {
+          setEmail(savedEmail);
+          setRememberMe(true);
+        }
+      } catch (e) {
+        console.log('Error loading saved rider email:', e);
+      }
+    };
+    loadSavedRiderEmail();
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const pickImage = async (type: 'license' | 'plate') => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Sorry, we need camera roll permissions to make this work!');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      if (type === 'license') setLicenseImage(result.assets[0].uri);
+      else setPlateImage(result.assets[0].uri);
+    }
+  };
+
   const handleAuth = async () => {
-    if (!email || !password) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
     setLoading(true);
     try {
       if (activeTab === 'login') {
-        await signIn(email, password);
+        await signIn(cleanEmail, password);
+        
+        if (rememberMe) {
+          await AsyncStorage.setItem('saved_rider_email', cleanEmail);
+        } else {
+          await AsyncStorage.removeItem('saved_rider_email');
+        }
       } else {
         if (!name || !province || !city || !licenseNumber || !vehiclePlateNumber || !vehicleModel) {
           Alert.alert('Error', 'Please provide your name, location, and all vehicle requirements.');
           setLoading(false);
           return;
         }
+
+        if (!licenseImage || !plateImage) {
+          Alert.alert('Documents Missing', 'Please upload images of your Driver\'s License and Vehicle Plate.');
+          setLoading(false);
+          return;
+        }
+
+        let licenseUrl = '';
+        let plateUrl = '';
+
+        try {
+          const timestamp = Date.now();
+          licenseUrl = await uploadImage(licenseImage, `riders/docs/${cleanEmail}_license_${timestamp}`);
+          plateUrl = await uploadImage(plateImage, `riders/docs/${cleanEmail}_plate_${timestamp}`);
+        } catch (uploadError) {
+          Alert.alert('Upload Failed', 'There was an error uploading your documents. Please try again.');
+          setLoading(false);
+          return;
+        }
+
         await signUp(
-          name, 
-          email, 
-          password, 
-          'rider', 
-          {
-            country: 'Philippines',
-            province,
-            city,
-            barangay
-          },
-          {
-            licenseNumber,
-            vehiclePlateNumber,
-            vehicleModel
-          }
+          name, cleanEmail, password, 'rider', 
+          { country: 'Philippines', province, city, barangay },
+          { licenseNumber, vehiclePlateNumber, vehicleModel, licenseImage: licenseUrl, plateImage: plateUrl }
         );
       }
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'RiderTabs' }],
-      });
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
     setLoading(false);
   };
 
-  // Demo mode
-  const handleDemoAccess = () => {
-    navigation.reset({
-        index: 0,
-        routes: [{ name: 'RiderTabs' }],
-    });
-  };
-
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.onSurface} />
-        </TouchableOpacity>
-      </View>
+      {/* Side Color Bar (Decorative) */}
+      <View style={styles.accentBar} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Hero Section */}
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        bounces={false}
+      >
         <View style={styles.heroSection}>
-          <Text style={styles.heroLabel}>PARTNER WITH US</Text>
-          <Text style={styles.heroTitle}>
-            Drive and <Text style={styles.heroHighlight}>Earn</Text>.
-          </Text>
-          <Text style={styles.heroDesc}>
-            Turn your gears into earnings. Join the elite network of Fetch Me Up riders and enjoy total flexibility with premium rewards.
-          </Text>
-        </View>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+          </TouchableOpacity>
 
-        {/* Feature Cards */}
-        <View style={styles.featureGrid}>
-          <View style={[styles.featureCard, { backgroundColor: COLORS.surfaceLow }]}>
-            <Ionicons name="wallet" size={28} color={COLORS.secondary} />
-            <Text style={styles.featureText}>Weekly Payouts</Text>
-          </View>
-          <View style={[styles.featureCard, { backgroundColor: COLORS.secondaryContainer }]}>
-            <Ionicons name="calendar" size={28} color={COLORS.onSurface} />
-            <Text style={styles.featureText}>Your Schedule</Text>
+          <View style={styles.heroContent}>
+             <Text style={styles.heroLabel}>RIDER PORTAL</Text>
+             <Text style={styles.heroTitle}>Move the{'\n'}<Text style={styles.heroHighlight}>Economy.</Text></Text>
+             <Text style={styles.heroDesc}>Join the network of professional couriers delivering excellence across the city.</Text>
           </View>
         </View>
 
-        {/* Testimonial */}
-        <View style={styles.testimonialCard}>
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop' }}
-            style={styles.testimonialAvatar}
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.testimonialQuote}>
-              "The best platform for high-value deliveries. I doubled my earnings in a month."
-            </Text>
-            <Text style={styles.testimonialAuthor}>— Marco, Pro Rider</Text>
-          </View>
-        </View>
-
-        {/* Login Form */}
-        <View style={styles.formCard}>
-          {/* Tab */}
-          <View style={styles.tabContainer}>
+        <Animated.View style={[styles.mainCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <View style={styles.tabWrapper}>
             <TouchableOpacity 
-              style={activeTab === 'login' ? styles.activeTab : styles.inactiveTab}
+              style={[styles.tab, activeTab === 'login' && styles.activeTab]}
               onPress={() => setActiveTab('login')}
             >
-              <Text style={activeTab === 'login' ? styles.activeTabText : styles.inactiveTabText}>Login</Text>
+              <Text style={[styles.tabText, activeTab === 'login' && styles.activeTabText]}>Portal Access</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={activeTab === 'signup' ? styles.activeTab : styles.inactiveTab}
+              style={[styles.tab, activeTab === 'signup' && styles.activeTab]}
               onPress={() => setActiveTab('signup')}
             >
-              <Text style={activeTab === 'signup' ? styles.activeTabText : styles.inactiveTabText}>Sign Up</Text>
+              <Text style={[styles.tabText, activeTab === 'signup' && styles.activeTabText]}>Apply Now</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>Rider Portal</Text>
-            <Text style={styles.formSubtitle}>Ready for your next trip?</Text>
-          </View>
+          <View style={styles.formContent}>
+            <Text style={styles.formHeader}>{activeTab === 'login' ? 'Authentication' : 'Partner Application'}</Text>
+            
+            <View style={styles.fields}>
+              {activeTab === 'signup' && (
+                <Input label="FULL NAME" placeholder="Marcus J." value={name} onChangeText={setName} variant="filled" />
+              )}
+              <Input label="EMAIL ADDRESS" placeholder="rider@fetchmeup.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" variant="filled" />
+              <Input label="PASSWORD" placeholder="••••••••" value={password} onChangeText={setPassword} secureTextEntry variant="filled" />
 
-          <View style={styles.formFields}>
-            {activeTab === 'signup' && (
-              <Input
-                label="Full Name"
-                placeholder="Marcus J."
-                value={name}
-                onChangeText={setName}
-              />
-            )}
-            <Input
-              label="Email Address"
-              placeholder="rider@fetchmeup.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-            <Input
-              label="Password"
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+              {activeTab === 'signup' && (
+                <View style={styles.nestedFields}>
+                  <Text style={styles.sectionLabel}>OPERATIONAL AREA</Text>
+                  <View style={styles.row}>
+                    <Input label="PROVINCE" placeholder="Agusan del Norte" value={province} onChangeText={setProvince} variant="filled" />
+                    <Input label="CITY" placeholder="Butuan" value={city} onChangeText={setCity} variant="filled" />
+                  </View>
+                  <Input label="BARANGAY" placeholder="e.g. Libertad" value={barangay} onChangeText={setBarangay} variant="filled" />
 
-            {activeTab === 'signup' && (
-              <View style={{ gap: SPACING.md, marginTop: SPACING.sm }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 2, color: COLORS.onSurfaceVariant }}>PRIMARY LOCATION</Text>
-                <Input
-                  label="Province"
-                  placeholder="e.g. Agusan del Norte"
-                  value={province}
-                  onChangeText={setProvince}
-                />
-                <Input
-                  label="City / Municipality"
-                  placeholder="e.g. Butuan City"
-                  value={city}
-                  onChangeText={setCity}
-                />
-                <Input
-                  label="Barangay (Optional)"
-                  placeholder="e.g. Libertad"
-                  value={barangay}
-                  onChangeText={setBarangay}
-                />
+                  <View style={styles.divider} />
+                  <Text style={styles.sectionLabel}>VEHICLE & LICENSE</Text>
+                  <Input label="LICENSE NUMBER" placeholder="N01-XX-XXXXXX" value={licenseNumber} onChangeText={setLicenseNumber} variant="filled" />
+                  <View style={styles.row}>
+                    <Input label="PLATE NUMBER" placeholder="ABC 1234" value={vehiclePlateNumber} onChangeText={setVehiclePlateNumber} variant="filled" />
+                    <Input label="MODEL" placeholder="Honda Click" value={vehicleModel} onChangeText={setVehicleModel} variant="filled" />
+                  </View>
 
-                <View style={styles.dividerLine} />
-                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 2, color: COLORS.onSurfaceVariant }}>DRIVER REQUIREMENTS</Text>
-                
-                <Input
-                  label="Driver's License Number"
-                  placeholder="e.g. N01-12-123456"
-                  value={licenseNumber}
-                  onChangeText={setLicenseNumber}
-                />
-                <Input
-                  label="Vehicle Plate Number"
-                  placeholder="e.g. ABC 1234"
-                  value={vehiclePlateNumber}
-                  onChangeText={setVehiclePlateNumber}
-                />
-                <Input
-                  label="Vehicle Model"
-                  placeholder="e.g. Honda Click 125i"
-                  value={vehicleModel}
-                  onChangeText={setVehicleModel}
-                />
-              </View>
-            )}
+                  <Text style={styles.sectionLabel}>SECURITY DOCUMENTS</Text>
+                  <View style={styles.uploadRow}>
+                    <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage('license')}>
+                      {licenseImage ? (
+                        <Image source={{ uri: licenseImage }} style={styles.uploadedImg} />
+                      ) : (
+                        <View style={styles.placeholderBox}>
+                          <Ionicons name="card" size={24} color={COLORS.secondary} />
+                          <Text style={styles.placeholderLabel}>License</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
 
-            {activeTab === 'login' && (
-              <View style={styles.rememberRow}>
-                <View style={styles.checkboxRow}>
-                  <View style={styles.checkbox} />
-                  <Text style={styles.rememberText}>Remember me</Text>
+                    <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage('plate')}>
+                      {plateImage ? (
+                        <Image source={{ uri: plateImage }} style={styles.uploadedImg} />
+                      ) : (
+                        <View style={styles.placeholderBox}>
+                          <Ionicons name="camera" size={24} color={COLORS.secondary} />
+                          <Text style={styles.placeholderLabel}>Plate</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <TouchableOpacity>
-                  <Text style={styles.forgotText}>Forgot password?</Text>
-                </TouchableOpacity>
+              )}
+
+              {activeTab === 'login' && (
+                <View style={styles.rememberRow}>
+                  <TouchableOpacity style={styles.rememberBtn} onPress={() => setRememberMe(!rememberMe)}>
+                    <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
+                       {rememberMe && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
+                    </View>
+                    <Text style={styles.rememberText}>Secure Remember me</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={{ marginTop: 24 }}>
+                <Button
+                  title={activeTab === 'login' ? "Secure Access" : "Submit Application"}
+                  onPress={handleAuth}
+                  size="xl"
+                  fullWidth
+                  loading={loading}
+                  variant={activeTab === 'login' ? 'primary' : 'secondary'}
+                  icon={<Ionicons name="shield-checkmark" size={22} color={COLORS.white} />}
+                />
               </View>
-            )}
-
-            <Button
-              title={activeTab === 'login' ? "Access Portal" : "Apply as Partner"}
-              onPress={handleAuth}
-              size="xl"
-              fullWidth
-              loading={loading}
-              icon={<Ionicons name="arrow-forward" size={22} color={COLORS.white} />}
-            />
-
-            <Button
-              title="Demo Access"
-              onPress={handleDemoAccess}
-              size="md"
-              fullWidth
-              variant="outline"
-              icon={<Ionicons name="flash" size={18} color={COLORS.onSurface} />}
-            />
+            </View>
           </View>
-
-          {activeTab === 'login' && (
-            <>
-              <View style={styles.becomeDivider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>BECOME A RIDER</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <Button
-                title="Apply to be a Partner"
-                onPress={() => setActiveTab('signup')}
-                variant="outline"
-                size="md"
-                fullWidth
-                icon={<Ionicons name="bicycle" size={22} color={COLORS.secondary} />}
-              />
-            </>
-          )}
-        </View>
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -281,192 +266,184 @@ export default function RiderPortalScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#0f1419', // Dark professional bg
   },
-  header: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: 50,
-    backgroundColor: COLORS.surface,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surfaceHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
+  accentBar: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 6,
+    backgroundColor: COLORS.secondary,
+    opacity: 0.3,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: 60,
-    paddingBottom: 40,
+    flexGrow: 1,
   },
   heroSection: {
-    marginBottom: SPACING.xxl,
+    height: 380,
+    paddingTop: 60,
+    paddingHorizontal: 24,
+    justifyContent: 'space-between',
+    paddingBottom: 60,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  heroContent: {
+    gap: 8,
   },
   heroLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 3,
-    color: COLORS.primary,
-    marginBottom: 8,
+    fontWeight: '800',
+    letterSpacing: 4,
+    color: COLORS.secondary,
   },
   heroTitle: {
-    fontSize: 42,
-    fontWeight: '800',
-    letterSpacing: -1,
-    color: COLORS.onSurface,
-    lineHeight: 46,
-    marginBottom: SPACING.md,
+    fontSize: 48,
+    fontWeight: '900',
+    color: COLORS.white,
+    letterSpacing: -1.5,
+    lineHeight: 52,
   },
   heroHighlight: {
-    color: COLORS.primary,
+    color: COLORS.secondary,
     fontStyle: 'italic',
   },
   heroDesc: {
-    fontSize: 16,
-    color: COLORS.onSurfaceVariant,
-    lineHeight: 24,
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 22,
+    maxWidth: '85%',
   },
-  featureGrid: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  featureCard: {
+  mainCard: {
     flex: 1,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.xl,
-    gap: SPACING.md,
-    minHeight: 100,
-    justifyContent: 'space-between',
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: -40,
+    paddingTop: 32,
+    paddingHorizontal: 24,
+    paddingBottom: 50,
+    ...SHADOWS.lg,
   },
-  featureText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  testimonialCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.lg,
-    backgroundColor: COLORS.surfaceHighest,
-    padding: SPACING.xl,
-    borderRadius: RADIUS.lg,
-    marginBottom: SPACING.xxl,
-  },
-  testimonialAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-  },
-  testimonialQuote: {
-    fontSize: 13,
-    fontWeight: '500',
-    fontStyle: 'italic',
-    color: COLORS.onSurface,
-    lineHeight: 19,
-  },
-  testimonialAuthor: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primary,
-    marginTop: 4,
-  },
-  formCard: {
-    backgroundColor: COLORS.surfaceLowest,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.xxl,
-    ...SHADOWS.md,
-    gap: SPACING.xl,
-  },
-  tabContainer: {
+  tabWrapper: {
     flexDirection: 'row',
     backgroundColor: COLORS.surfaceLow,
     borderRadius: RADIUS.full,
     padding: 4,
+    marginBottom: 32,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: RADIUS.full,
+    alignItems: 'center',
   },
   activeTab: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surfaceLowest,
+    backgroundColor: COLORS.white,
     ...SHADOWS.sm,
-    alignItems: 'center',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(15,20,25,0.4)',
   },
   activeTabText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.primary,
+    color: COLORS.secondary,
   },
-  inactiveTab: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: RADIUS.full,
-    alignItems: 'center',
-  },
-  inactiveTabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: `${COLORS.onSurfaceVariant}80`,
+  formContent: {
+    gap: 24,
   },
   formHeader: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0f1419',
+    letterSpacing: -0.5,
+  },
+  fields: {
+    gap: 20,
+  },
+  nestedFields: {
+    gap: 16,
+    marginTop: 10,
+  },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 2.5,
+    color: COLORS.secondary,
+    marginBottom: 2,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    marginVertical: 10,
+  },
+  uploadRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  uploadBox: {
+    flex: 1,
+    height: 100,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.surfaceLow,
+    borderWidth: 2,
+    borderColor: 'rgba(73,83,172,0.1)',
+    borderStyle: 'dashed',
+    overflow: 'hidden',
+  },
+  uploadedImg: {
+    width: '100%',
+    height: '100%',
+  },
+  placeholderBox: {
+    flex: 1,
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    gap: 6,
   },
-  formTitle: {
-    fontSize: 26,
+  placeholderLabel: {
+    fontSize: 11,
     fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  formSubtitle: {
-    fontSize: 14,
-    color: COLORS.onSurfaceVariant,
-  },
-  formFields: {
-    gap: SPACING.lg,
+    color: COLORS.secondary,
   },
   rememberRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginTop: 8,
   },
-  checkboxRow: {
+  rememberBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   checkbox: {
     width: 20,
     height: 20,
-    borderRadius: 4,
+    borderRadius: 6,
     borderWidth: 2,
-    borderColor: COLORS.outlineVariant,
+    borderColor: 'rgba(73,83,172,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: COLORS.secondary,
+    borderColor: COLORS.secondary,
   },
   rememberText: {
     fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.onSurfaceVariant,
-  },
-  forgotText: {
-    fontSize: 13,
     fontWeight: '600',
-    color: COLORS.primary,
-  },
-  becomeDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.surfaceHigh,
-  },
-  dividerText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: `${COLORS.onSurfaceVariant}50`,
+    color: COLORS.onSurfaceVariant,
   },
 });

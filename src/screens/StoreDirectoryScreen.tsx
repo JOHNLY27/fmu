@@ -10,299 +10,154 @@ import {
   Dimensions,
   StatusBar,
   Animated,
-  FlatList,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
+import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import { BUTUAN_STORES, STORE_CATEGORIES } from '../constants/butuanStores';
-import { Store, StoreCategory } from '../types';
 
 const { width } = Dimensions.get('window');
 
 export default function StoreDirectoryScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState<StoreCategory>('All');
+  const [activeCategory, setActiveCategory] = useState('All');
+  
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
+    ]).start();
   }, []);
 
   const filteredStores = useMemo(() => {
     let stores = BUTUAN_STORES;
-
-    if (activeCategory !== 'All') {
-      stores = stores.filter(s => s.category === activeCategory);
-    }
-
-    if (searchQuery.trim()) {
+    if (activeCategory !== 'All') stores = stores.filter(s => s.category === activeCategory);
+    if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      stores = stores.filter(s =>
-        s.name.toLowerCase().includes(q) ||
-        s.category.toLowerCase().includes(q) ||
-        s.tags.some(t => t.toLowerCase().includes(q)) ||
-        s.barangay.toLowerCase().includes(q) ||
-        s.address.toLowerCase().includes(q)
-      );
+      stores = stores.filter(s => s.name.toLowerCase().includes(q) || s.barangay.toLowerCase().includes(q));
     }
-
     return stores;
   }, [searchQuery, activeCategory]);
 
-  const featuredStores = useMemo(() =>
-    BUTUAN_STORES.filter(s => s.isFeatured),
-    []);
-
-  const storeCount = useMemo(() => {
-    const counts: Partial<Record<StoreCategory, number>> = {};
-    BUTUAN_STORES.forEach(s => {
-      counts[s.category] = (counts[s.category] || 0) + 1;
-    });
-    return counts;
-  }, []);
-
-  const renderStoreCard = (store: Store) => (
-    <TouchableOpacity
-      key={store.id}
-      style={styles.storeCard}
-      activeOpacity={0.88}
-      onPress={() => navigation.navigate('PabiliOrder', { store })}
-    >
-      <View style={styles.storeImageContainer}>
-        <Image source={{ uri: store.image }} style={styles.storeImage} resizeMode="cover" />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.5)']}
-          style={styles.storeImageGradient}
-        />
-        {/* Rating */}
-        <View style={styles.ratingBadge}>
-          <Ionicons name="star" size={10} color="#FFB800" />
-          <Text style={styles.ratingText}>{store.rating}</Text>
-        </View>
-        {/* Open/Closed */}
-        <View style={[styles.statusBadge, !store.isOpen && styles.closedBadge]}>
-          <View style={[styles.statusDot, !store.isOpen && styles.closedDot]} />
-          <Text style={[styles.statusText, !store.isOpen && styles.closedText]}>
-            {store.isOpen ? 'Open' : 'Closed'}
-          </Text>
-        </View>
-        {/* Verified */}
-        {store.isVerified && (
-          <View style={styles.verifiedBadge}>
-            <Ionicons name="checkmark-circle" size={14} color={COLORS.white} />
-          </View>
-        )}
-      </View>
-      <View style={styles.storeInfo}>
-        <View style={styles.storeInfoLeft}>
-          <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
-          <Text style={styles.storeCategory}>{store.category}</Text>
-          <View style={styles.storeLocationRow}>
-            <Ionicons name="location-outline" size={12} color={COLORS.onSurfaceVariant} />
-            <Text style={styles.storeLocation} numberOfLines={1}>{store.barangay}, Butuan</Text>
-          </View>
-        </View>
-        <View style={styles.pabiliBtn}>
-          <Ionicons name="bag-add" size={18} color={COLORS.white} />
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderFeaturedCard = (store: Store) => (
-    <TouchableOpacity
-      key={store.id}
-      style={styles.featuredCard}
-      activeOpacity={0.9}
-      onPress={() => navigation.navigate('PabiliOrder', { store })}
-    >
-      <Image source={{ uri: store.image }} style={styles.featuredImage} resizeMode="cover" />
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.8)']}
-        style={styles.featuredGradient}
-      />
-      <View style={styles.featuredContent}>
-        <View style={styles.featuredBadgeContainer}>
-          <LinearGradient
-            colors={[COLORS.primary, COLORS.primaryLight]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.featuredBadge}
-          >
-            <Ionicons name="flame" size={10} color={COLORS.white} />
-            <Text style={styles.featuredBadgeText}>POPULAR</Text>
-          </LinearGradient>
-        </View>
-        <Text style={styles.featuredName} numberOfLines={1}>{store.name}</Text>
-        <Text style={styles.featuredDesc} numberOfLines={2}>{store.description}</Text>
-        <View style={styles.featuredMeta}>
-          <View style={styles.featuredMetaItem}>
-            <Ionicons name="star" size={12} color="#FFB800" />
-            <Text style={styles.featuredMetaText}>{store.rating}</Text>
-          </View>
-          <View style={styles.featuredMetaItem}>
-            <Ionicons name="location" size={12} color={COLORS.white} />
-            <Text style={styles.featuredMetaText}>{store.barangay}</Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
-
-      {/* Header */}
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+      
+      {/* Premium Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.onSurface} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerSubtitle}>BUTUAN CITY</Text>
-          <Text style={styles.headerTitle}>Store Directory</Text>
-        </View>
-        <View style={styles.headerBadge}>
-          <Text style={styles.headerBadgeText}>{BUTUAN_STORES.length}</Text>
-          <Text style={styles.headerBadgeLabel}>stores</Text>
-        </View>
+         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.onSurface} />
+         </TouchableOpacity>
+         <View style={styles.headerInfo}>
+            <Text style={styles.headerLabel}>URBAN MARKETPLACE</Text>
+            <Text style={styles.headerTitle}>Pabili Services</Text>
+         </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={`${COLORS.onSurfaceVariant}80`} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search stores, products, or barangays..."
-            placeholderTextColor={`${COLORS.onSurfaceVariant}50`}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color={COLORS.onSurfaceVariant} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Quick Info Banner */}
-        <View style={styles.infoBanner}>
-          <LinearGradient
-            colors={[COLORS.primary, COLORS.primaryLight]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.infoBannerGradient}
-          >
-            <View style={styles.infoBannerIcon}>
-              <Ionicons name="bag-handle" size={28} color={COLORS.white} />
+         
+         {/* Search Interface */}
+         <View style={styles.searchBlock}>
+            <View style={styles.searchBar}>
+               <Ionicons name="search" size={20} color="rgba(0,0,0,0.2)" />
+               <TextInput 
+                  placeholder="Items, stores, or essentials..." 
+                  style={styles.searchInput}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+               />
+               <TouchableOpacity style={styles.scanBtn}>
+                  <Ionicons name="scan" size={20} color={COLORS.primary} />
+               </TouchableOpacity>
             </View>
-            <View style={styles.infoBannerContent}>
-              <Text style={styles.infoBannerTitle}>Pa-bili na! 🛍️</Text>
-              <Text style={styles.infoBannerDesc}>
-                Pick any store below, tell us what you need, and a rider will buy it for you!
-              </Text>
+         </View>
+
+         {/* Hero Promo */}
+         <TouchableOpacity style={styles.heroBanner} activeOpacity={0.9}>
+            <Image 
+               source={{ uri: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800' }} 
+               style={styles.heroImg} 
+            />
+            <LinearGradient colors={['transparent', 'rgba(15,20,25,0.85)']} style={styles.heroOverlay} />
+            <View style={styles.heroContent}>
+               <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>ESTABLISHED</Text></View>
+               <Text style={styles.heroTitle}>Premium Groceries</Text>
+               <Text style={styles.heroSub}>Local hyper-markets fetched directly to you</Text>
             </View>
-          </LinearGradient>
-        </View>
+         </TouchableOpacity>
 
-        {/* Category Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScroll}
-        >
-          {STORE_CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat.label}
-              style={[
-                styles.categoryChip,
-                activeCategory === cat.label && styles.categoryChipActive,
-              ]}
-              onPress={() => setActiveCategory(cat.label)}
-            >
-              <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-              <Text
-                style={[
-                  styles.categoryText,
-                  activeCategory === cat.label && styles.categoryTextActive,
-                ]}
-              >
-                {cat.label}
-              </Text>
-              {cat.label !== 'All' && storeCount[cat.label] && (
-                <View style={[
-                  styles.categoryCount,
-                  activeCategory === cat.label && styles.categoryCountActive
-                ]}>
-                  <Text style={[
-                    styles.categoryCountText,
-                    activeCategory === cat.label && styles.categoryCountTextActive,
-                  ]}>
-                    {storeCount[cat.label]}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+         {/* Categories */}
+         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScroll}>
+            {STORE_CATEGORIES.map((cat, i) => (
+               <TouchableOpacity 
+                  key={i} 
+                  style={[styles.catChip, activeCategory === cat.label && styles.activeCatChip]}
+                  onPress={() => setActiveCategory(cat.label)}
+               >
+                  <Text style={styles.catEmoji}>{cat.emoji}</Text>
+                  <Text style={[styles.catLabel, activeCategory === cat.label && styles.activeCatLabel]}>{cat.label}</Text>
+               </TouchableOpacity>
+            ))}
+         </ScrollView>
 
-        {/* Featured Stores (horizontal) — only show when not searching */}
-        {!searchQuery && activeCategory === 'All' && (
-          <>
-            <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionLabel}>🔥 HOT PICKS</Text>
-                <Text style={styles.sectionTitle}>Featured Stores</Text>
-              </View>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.featuredScroll}
-            >
-              {featuredStores.map(renderFeaturedCard)}
-            </ScrollView>
-          </>
-        )}
+         {/* Store Grid */}
+         <View style={styles.gridHeader}>
+            <Text style={styles.gridTitle}>AVAILABLE VENDORS</Text>
+            <Text style={styles.gridCount}>{filteredStores.length} OPERATIONAL</Text>
+         </View>
 
-        {/* Store Grid */}
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionLabel}>
-              {activeCategory === 'All' ? '📍 ALL STORES' : `${STORE_CATEGORIES.find(c => c.label === activeCategory)?.emoji || ''} ${activeCategory.toUpperCase()}`}
-            </Text>
-            <Text style={styles.sectionTitle}>
-              {searchQuery
-                ? `${filteredStores.length} result${filteredStores.length !== 1 ? 's' : ''} found`
-                : activeCategory === 'All'
-                  ? 'Browse All in Butuan'
-                  : `${activeCategory} Stores`}
-            </Text>
-          </View>
-        </View>
+         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            {filteredStores.map((store) => (
+               <TouchableOpacity 
+                  key={store.id} 
+                  style={styles.storeCard}
+                  onPress={() => navigation.navigate('PabiliOrder', { store })}
+                  activeOpacity={0.9}
+               >
+                  <View style={styles.cardVisual}>
+                     <Image 
+                        source={{ uri: store.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500' }} 
+                        style={styles.storeImg} 
+                     />
+                     <View style={styles.cardHeader}>
+                        <View style={styles.ratingBox}>
+                           <Ionicons name="star" size={10} color={COLORS.tertiary} />
+                           <Text style={styles.ratingVal}>{store.rating}</Text>
+                        </View>
+                        {store.isVerified && (
+                           <View style={styles.verifiedBox}>
+                              <Ionicons name="shield-checkmark" size={12} color={COLORS.white} />
+                           </View>
+                        )}
+                     </View>
+                     <View style={styles.statusBox}>
+                        <View style={[styles.statusDot, { backgroundColor: store.isOpen ? COLORS.tertiary : COLORS.error }]} />
+                        <Text style={styles.statusText}>{store.isOpen ? 'ACTIVE' : 'OFFLINE'}</Text>
+                     </View>
+                  </View>
+                  <View style={styles.storeDetails}>
+                     <View style={{ flex: 1 }}>
+                        <Text style={styles.storeName}>{store.name}</Text>
+                        <Text style={styles.storeLoc}>{store.category} • {store.barangay}</Text>
+                     </View>
+                     <TouchableOpacity 
+                        style={styles.actionBtn}
+                        onPress={() => navigation.navigate('PabiliOrder', { store })}
+                     >
+                        <Ionicons name="add-circle" size={24} color={COLORS.primary} />
+                     </TouchableOpacity>
+                  </View>
+               </TouchableOpacity>
+            ))}
+         </Animated.View>
 
-        {filteredStores.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="search-outline" size={48} color={`${COLORS.onSurfaceVariant}40`} />
-            <Text style={styles.emptyTitle}>No stores found</Text>
-            <Text style={styles.emptyDesc}>
-              Try a different search term or category
-            </Text>
-          </View>
-        ) : (
-          <Animated.View style={{ opacity: fadeAnim }}>
-            {filteredStores.map(renderStoreCard)}
-          </Animated.View>
-        )}
-
-        <View style={{ height: 40 }} />
+         <View style={{ height: 100 }} />
       </ScrollView>
+
     </View>
   );
 }
@@ -310,395 +165,252 @@ export default function StoreDirectoryScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#F8F9FA',
   },
   header: {
+    paddingTop: 60,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xl,
-    paddingTop: 50,
-    paddingBottom: SPACING.md,
-    backgroundColor: COLORS.surface,
+    paddingHorizontal: 20,
+    gap: 16,
+    paddingBottom: 20,
+    backgroundColor: COLORS.white,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surfaceHigh,
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#F8F9FA',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerCenter: {
-    alignItems: 'center',
+  headerInfo: {
+    flex: 1,
   },
-  headerSubtitle: {
+  headerLabel: {
     fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 3,
-    color: COLORS.primary,
+    fontWeight: '900',
+    color: 'rgba(0,0,0,0.3)',
+    letterSpacing: 1.5,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
     color: COLORS.onSurface,
     letterSpacing: -0.5,
   },
-  headerBadge: {
-    alignItems: 'center',
-    backgroundColor: `${COLORS.primary}15`,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: RADIUS.full,
-  },
-  headerBadgeText: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: COLORS.primary,
-  },
-  headerBadgeLabel: {
-    fontSize: 8,
-    fontWeight: '700',
-    color: COLORS.primary,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
   scrollContent: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.md,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
-  searchContainer: {
+  searchBlock: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceLowest,
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 16,
+    backgroundColor: COLORS.white,
     height: 52,
-    marginBottom: SPACING.lg,
-    gap: 10,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    gap: 12,
     ...SHADOWS.sm,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
+    fontWeight: '700',
     color: COLORS.onSurface,
-    fontWeight: '500',
   },
-  infoBanner: {
-    marginBottom: SPACING.xl,
-    borderRadius: RADIUS.lg,
+  scanBtn: {
+    padding: 8,
+  },
+  heroBanner: {
+    marginHorizontal: 20,
+    height: 180,
+    borderRadius: 24,
     overflow: 'hidden',
+    marginBottom: 32,
     ...SHADOWS.md,
   },
-  infoBannerGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.lg,
-    gap: SPACING.md,
-  },
-  infoBannerIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoBannerContent: {
-    flex: 1,
-  },
-  infoBannerTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.white,
-    marginBottom: 2,
-  },
-  infoBannerDesc: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
-    fontWeight: '500',
-    lineHeight: 17,
-  },
-  categoryScroll: {
-    paddingBottom: SPACING.xl,
-    gap: SPACING.sm,
-  },
-  categoryChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surfaceLowest,
-    gap: 6,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  categoryChipActive: {
-    backgroundColor: `${COLORS.primary}12`,
-    borderColor: COLORS.primary,
-  },
-  categoryEmoji: {
-    fontSize: 15,
-  },
-  categoryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.onSurfaceVariant,
-  },
-  categoryTextActive: {
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  categoryCount: {
-    backgroundColor: `${COLORS.onSurfaceVariant}15`,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: RADIUS.full,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  categoryCountActive: {
-    backgroundColor: `${COLORS.primary}20`,
-  },
-  categoryCountText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.onSurfaceVariant,
-  },
-  categoryCountTextActive: {
-    color: COLORS.primary,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: SPACING.lg,
-  },
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: COLORS.primary,
-    marginBottom: 2,
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.onSurface,
-    letterSpacing: -0.5,
-  },
-  // Featured cards
-  featuredScroll: {
-    gap: SPACING.md,
-    paddingBottom: SPACING.xxl,
-  },
-  featuredCard: {
-    width: width * 0.72,
-    height: 200,
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    ...SHADOWS.lg,
-  },
-  featuredImage: {
+  heroImg: {
     width: '100%',
     height: '100%',
-    position: 'absolute',
   },
-  featuredGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '85%',
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
-  featuredContent: {
+  heroContent: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: SPACING.lg,
+    bottom: 20,
+    left: 20,
+    right: 20,
   },
-  featuredBadgeContainer: {
+  heroBadge: {
     alignSelf: 'flex-start',
-    marginBottom: 6,
-  },
-  featuredBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: RADIUS.full,
+    borderRadius: 6,
+    marginBottom: 8,
   },
-  featuredBadgeText: {
+  heroBadgeText: {
     fontSize: 8,
     fontWeight: '900',
     color: COLORS.white,
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
-  featuredName: {
-    fontSize: 20,
-    fontWeight: '800',
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: '900',
     color: COLORS.white,
-    marginBottom: 2,
+    letterSpacing: -0.5,
   },
-  featuredDesc: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
-    lineHeight: 15,
-    marginBottom: 8,
+  heroSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '600',
+    marginTop: 2,
   },
-  featuredMeta: {
-    flexDirection: 'row',
+  catScroll: {
+    paddingLeft: 20,
+    paddingBottom: 32,
     gap: 12,
   },
-  featuredMetaItem: {
+  catChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  featuredMetaText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.white,
-  },
-  // Store cards
-  storeCard: {
-    marginBottom: SPACING.lg,
-    borderRadius: RADIUS.lg,
-    backgroundColor: COLORS.surfaceLowest,
-    overflow: 'hidden',
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    gap: 8,
     ...SHADOWS.sm,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  storeImageContainer: {
-    height: 140,
+  activeCatChip: {
+    borderColor: COLORS.primary,
+    backgroundColor: `${COLORS.primary}05`,
+  },
+  catEmoji: {
+    fontSize: 16,
+  },
+  catLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.4)',
+  },
+  activeCatLabel: {
+    color: COLORS.primary,
+  },
+  gridHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  gridTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+    color: 'rgba(0,0,0,0.25)',
+  },
+  gridCount: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.tertiary,
+    letterSpacing: 1,
+  },
+  storeCard: {
+    marginHorizontal: 20,
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    marginBottom: 20,
+    ...SHADOWS.md,
     overflow: 'hidden',
   },
-  storeImage: {
+  cardVisual: {
+    height: 140,
+    position: 'relative',
+  },
+  storeImg: {
     width: '100%',
     height: '100%',
   },
-  storeImageGradient: {
+  cardHeader: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '50%',
-  },
-  ratingBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
+    top: 12,
+    left: 12,
+    right: 12,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADIUS.full,
+    justifyContent: 'space-between',
   },
-  ratingText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  statusBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
+  ratingBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,106,40,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: RADIUS.full,
+    borderRadius: 8,
   },
-  closedBadge: {
-    backgroundColor: 'rgba(186,26,26,0.9)',
+  ratingVal: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORS.onSurface,
+  },
+  verifiedBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.tertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  statusBox: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    backgroundColor: 'rgba(15,20,25,0.85)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#5cfd80',
-  },
-  closedDot: {
-    backgroundColor: '#ffb4ab',
   },
   statusText: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 8,
+    fontWeight: '900',
     color: COLORS.white,
     letterSpacing: 1,
   },
-  closedText: {
-    color: '#ffb4ab',
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,106,40,0.85)',
-    borderRadius: RADIUS.full,
-    padding: 3,
-  },
-  storeInfo: {
+  storeDetails: {
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.md,
-  },
-  storeInfoLeft: {
-    flex: 1,
   },
   storeName: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: COLORS.onSurface,
-    marginBottom: 2,
   },
-  storeCategory: {
+  storeLoc: {
     fontSize: 11,
+    color: 'rgba(0,0,0,0.4)',
     fontWeight: '600',
-    color: COLORS.primary,
-    marginBottom: 4,
+    marginTop: 2,
   },
-  storeLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  storeLocation: {
-    fontSize: 11,
-    color: COLORS.onSurfaceVariant,
-    fontWeight: '500',
-  },
-  pabiliBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...SHADOWS.md,
-  },
-  // Empty state
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: SPACING.huge,
-    gap: SPACING.md,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.onSurface,
-  },
-  emptyDesc: {
-    fontSize: 13,
-    color: COLORS.onSurfaceVariant,
-    textAlign: 'center',
+  actionBtn: {
+    marginLeft: 12,
   },
 });

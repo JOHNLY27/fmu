@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   User as FirebaseUser,
@@ -24,9 +24,9 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   firebaseUser: null,
   loading: true,
-  signIn: async () => {},
-  signUp: async () => {},
-  signOut: async () => {},
+  signIn: async () => { },
+  signUp: async () => { },
+  signOut: async () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -67,18 +67,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (name: string, email: string, password: string, role: 'user' | 'rider' = 'user', location?: UserLocation, requirements?: RiderRequirements) => {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(credential.user, { displayName: name });
-    
-    const userData: User = {
+
+    // Build user data - only include fields that have actual values
+    const finalData: Record<string, any> = {
       uid: credential.user.uid,
-      name,
-      email,
-      role,
-      location,
-      requirements,
+      name: name,
+      email: email,
+      role: role,
+      status: role === 'rider' ? 'pending' : 'approved',
+      createdAt: new Date().toISOString(),
     };
+
+    // Only add location if it was provided
+    if (location && typeof location === 'object') {
+      finalData.location = JSON.parse(JSON.stringify(location));
+    }
+
+    // Only add requirements if it was provided  
+    if (requirements && typeof requirements === 'object') {
+      finalData.requirements = JSON.parse(JSON.stringify(requirements));
+    }
+
+    // Nuclear clean: this strips ALL undefined/null from the entire object
+    const safeData = JSON.parse(JSON.stringify(finalData));
     
-    await setDoc(doc(db, 'users', credential.user.uid), userData);
-    setUser(userData);
+    await setDoc(doc(db, 'users', safeData.uid), safeData);
+    setUser(safeData);
   };
 
   const signOut = async () => {

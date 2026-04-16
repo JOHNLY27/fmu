@@ -326,7 +326,7 @@ export default function TrackingTabScreen({ navigation }: any) {
             </Text>
             <TouchableOpacity
               style={styles.emptyOrderBtn}
-              onPress={() => navigation.navigate('Home')}
+              onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
             >
               <LinearGradient
                 colors={[COLORS.primary, COLORS.primaryLight]}
