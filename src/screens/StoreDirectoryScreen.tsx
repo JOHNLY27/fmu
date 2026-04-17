@@ -11,15 +11,19 @@ import {
   StatusBar,
   Animated,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
-import { BUTUAN_STORES, STORE_CATEGORIES } from '../constants/butuanStores';
+import { STORE_CATEGORIES } from '../constants/butuanStores';
+import { subscribeToActiveMerchants, Merchant } from '../services/merchantService';
 
 const { width } = Dimensions.get('window');
 
 export default function StoreDirectoryScreen({ navigation }: any) {
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   
@@ -27,21 +31,28 @@ export default function StoreDirectoryScreen({ navigation }: any) {
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
-    ]).start();
+    const unsubscribe = subscribeToActiveMerchants((data) => {
+      setMerchants(data);
+      setLoading(false);
+      
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
+      ]).start();
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const filteredStores = useMemo(() => {
-    let stores = BUTUAN_STORES;
+    let stores = merchants;
     if (activeCategory !== 'All') stores = stores.filter(s => s.category === activeCategory);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      stores = stores.filter(s => s.name.toLowerCase().includes(q) || s.barangay.toLowerCase().includes(q));
+      stores = stores.filter(s => s.name.toLowerCase().includes(q) || (s.barangay || '').toLowerCase().includes(q));
     }
     return stores;
-  }, [searchQuery, activeCategory]);
+  }, [merchants, searchQuery, activeCategory]);
 
   return (
     <View style={styles.container}>
@@ -76,6 +87,40 @@ export default function StoreDirectoryScreen({ navigation }: any) {
             </View>
          </View>
 
+         {/* Manual Request Prompt */}
+         <View style={styles.manualWrapper}>
+            <LinearGradient 
+               colors={[COLORS.onSurface, '#2d3748']} 
+               style={styles.manualCard}
+               start={{ x: 0, y: 0 }}
+               end={{ x: 1, y: 0 }}
+            >
+               <View style={styles.manualInfo}>
+                  <Text style={styles.manualTitle}>General Mission Request</Text>
+                  <Text style={styles.manualSub}>Can't find your store? Our agents will fetch from any coordinates.</Text>
+                  <TouchableOpacity 
+                    style={styles.manualBtn}
+                    onPress={() => navigation.navigate('PabiliOrder', { 
+                      store: { 
+                        id: 'general', 
+                        name: 'Any Store in Butuan', 
+                        category: 'Others', 
+                        address: 'Multiple Locations', 
+                        barangay: 'User Choice',
+                        image: 'https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?w=800'
+                      } 
+                    })}
+                  >
+                     <Text style={styles.manualBtnText}>POST REQUEST</Text>
+                     <Ionicons name="arrow-forward" size={14} color={COLORS.onSurface} />
+                  </TouchableOpacity>
+               </View>
+               <View style={styles.manualVisual}>
+                  <Ionicons name="create-outline" size={60} color="rgba(255,255,255,0.05)" style={styles.manualBgIcon} />
+               </View>
+            </LinearGradient>
+         </View>
+
          {/* Hero Promo */}
          <TouchableOpacity style={styles.heroBanner} activeOpacity={0.9}>
             <Image 
@@ -105,55 +150,98 @@ export default function StoreDirectoryScreen({ navigation }: any) {
          </ScrollView>
 
          {/* Store Grid */}
+         {/* Filter Header */}
          <View style={styles.gridHeader}>
-            <Text style={styles.gridTitle}>AVAILABLE VENDORS</Text>
-            <Text style={styles.gridCount}>{filteredStores.length} OPERATIONAL</Text>
+            <Text style={styles.gridTitle}>
+               {activeCategory === 'All' ? 'BROWSE BY CATEGORY' : `${activeCategory.toUpperCase()} VENDORS`}
+            </Text>
+            {activeCategory !== 'All' && (
+              <TouchableOpacity onPress={() => setActiveCategory('All')}>
+                 <Text style={styles.clearBtn}>View All</Text>
+              </TouchableOpacity>
+            )}
          </View>
 
-         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-            {filteredStores.map((store) => (
-               <TouchableOpacity 
-                  key={store.id} 
-                  style={styles.storeCard}
-                  onPress={() => navigation.navigate('PabiliOrder', { store })}
-                  activeOpacity={0.9}
-               >
-                  <View style={styles.cardVisual}>
-                     <Image 
-                        source={{ uri: store.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500' }} 
-                        style={styles.storeImg} 
-                     />
-                     <View style={styles.cardHeader}>
-                        <View style={styles.ratingBox}>
-                           <Ionicons name="star" size={10} color={COLORS.tertiary} />
-                           <Text style={styles.ratingVal}>{store.rating}</Text>
-                        </View>
-                        {store.isVerified && (
-                           <View style={styles.verifiedBox}>
-                              <Ionicons name="shield-checkmark" size={12} color={COLORS.white} />
+         {loading ? (
+           <View style={{ paddingVertical: 40 }}>
+             <ActivityIndicator size="large" color={COLORS.primary} />
+             <Text style={{ textAlign: 'center', marginTop: 12, color: 'rgba(0,0,0,0.3)', fontWeight: '700' }}>SEARCHING MARKETPLACE...</Text>
+           </View>
+         ) : (
+           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+              {activeCategory === 'All' && !searchQuery ? (
+                <View style={styles.catMatrix}>
+                   {/* Primary Category Matrix */}
+                   {STORE_CATEGORIES.filter(c => c.label !== 'All').map((cat, i) => (
+                      <TouchableOpacity 
+                         key={i} 
+                         style={styles.matrixCard}
+                         onPress={() => setActiveCategory(cat.label)}
+                         activeOpacity={0.8}
+                      >
+                         <View style={styles.matrixIconBox}>
+                            <Text style={styles.matrixEmoji}>{cat.emoji}</Text>
+                         </View>
+                         <Text style={styles.matrixLabel}>{cat.label}</Text>
+                      </TouchableOpacity>
+                   ))}
+                </View>
+              ) : (
+                <View>
+                   {/* Filtered Store List */}
+                   {filteredStores.length === 0 ? (
+                     <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                        <Ionicons name="alert-circle-outline" size={40} color="rgba(0,0,0,0.2)" />
+                        <Text style={{ marginTop: 12, color: 'rgba(0,0,0,0.3)', fontWeight: '700' }}>NO VENDORS FOUND</Text>
+                     </View>
+                   ) : (
+                     filteredStores.map((store) => (
+                        <TouchableOpacity 
+                           key={store.id} 
+                           style={styles.storeCard}
+                           onPress={() => navigation.navigate('PabiliOrder', { store })}
+                           activeOpacity={0.9}
+                        >
+                           <View style={styles.cardVisual}>
+                              <Image 
+                                 source={{ uri: store.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500' }} 
+                                 style={styles.storeImg} 
+                              />
+                              <View style={styles.cardHeader}>
+                                 <View style={styles.ratingBox}>
+                                    <Ionicons name="star" size={10} color={COLORS.tertiary} />
+                                    <Text style={styles.ratingVal}>{store.rating}</Text>
+                                 </View>
+                                 {store.isVerified && (
+                                    <View style={styles.verifiedBox}>
+                                       <Ionicons name="shield-checkmark" size={12} color={COLORS.white} />
+                                    </View>
+                                 )}
+                              </View>
+                              <View style={styles.statusBox}>
+                                 <View style={[styles.statusDot, { backgroundColor: store.isOpen ? COLORS.tertiary : COLORS.error }]} />
+                                 <Text style={styles.statusText}>{store.isOpen ? 'ACTIVE' : 'OFFLINE'}</Text>
+                              </View>
                            </View>
-                        )}
-                     </View>
-                     <View style={styles.statusBox}>
-                        <View style={[styles.statusDot, { backgroundColor: store.isOpen ? COLORS.tertiary : COLORS.error }]} />
-                        <Text style={styles.statusText}>{store.isOpen ? 'ACTIVE' : 'OFFLINE'}</Text>
-                     </View>
-                  </View>
-                  <View style={styles.storeDetails}>
-                     <View style={{ flex: 1 }}>
-                        <Text style={styles.storeName}>{store.name}</Text>
-                        <Text style={styles.storeLoc}>{store.category} • {store.barangay}</Text>
-                     </View>
-                     <TouchableOpacity 
-                        style={styles.actionBtn}
-                        onPress={() => navigation.navigate('PabiliOrder', { store })}
-                     >
-                        <Ionicons name="add-circle" size={24} color={COLORS.primary} />
-                     </TouchableOpacity>
-                  </View>
-               </TouchableOpacity>
-            ))}
-         </Animated.View>
+                           <View style={styles.storeDetails}>
+                              <View style={{ flex: 1 }}>
+                                 <Text style={styles.storeName}>{store.name}</Text>
+                                 <Text style={styles.storeLoc}>{store.category} • {store.barangay}</Text>
+                              </View>
+                              <TouchableOpacity 
+                                 style={styles.actionBtn}
+                                 onPress={() => navigation.navigate('PabiliOrder', { store })}
+                              >
+                                 <Ionicons name="add-circle" size={24} color={COLORS.primary} />
+                              </TouchableOpacity>
+                           </View>
+                        </TouchableOpacity>
+                     ))
+                   )}
+                </View>
+              )}
+           </Animated.View>
+         )}
 
          <View style={{ height: 100 }} />
       </ScrollView>
@@ -232,6 +320,59 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 32,
     ...SHADOWS.md,
+  },
+  manualWrapper: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  manualCard: {
+    borderRadius: 24,
+    padding: 24,
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+  manualInfo: {
+    flex: 2,
+    zIndex: 2,
+  },
+  manualTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.white,
+    marginBottom: 4,
+  },
+  manualSub: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 16,
+    fontWeight: '500',
+    marginBottom: 20,
+  },
+  manualBtn: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+  },
+  manualBtnText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORS.onSurface,
+    letterSpacing: 1,
+  },
+  manualVisual: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  manualBgIcon: {
+    position: 'absolute',
+    right: -20,
+    bottom: -20,
   },
   heroImg: {
     width: '100%',
@@ -317,11 +458,43 @@ const styles = StyleSheet.create({
     letterSpacing: 2.5,
     color: 'rgba(0,0,0,0.25)',
   },
-  gridCount: {
+  clearBtn: {
     fontSize: 10,
     fontWeight: '800',
-    color: COLORS.tertiary,
+    color: COLORS.primary,
     letterSpacing: 1,
+  },
+  catMatrix: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  matrixCard: {
+    width: (width - 54) / 2,
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.sm,
+  },
+  matrixIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 20,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  matrixEmoji: {
+    fontSize: 28,
+  },
+  matrixLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.onSurface,
   },
   storeCard: {
     marginHorizontal: 20,

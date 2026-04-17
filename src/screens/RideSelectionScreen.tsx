@@ -18,7 +18,9 @@ import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import Button from '../components/ui/Button';
 import BarangaySelector from '../components/ui/BarangaySelector';
 import { useAuth } from '../context/AuthContext';
-import { createOrder } from '../services/orderService';
+import { createOrder, PaymentMethod } from '../services/orderService';
+import PaymentMethodSelector from '../components/ui/PaymentMethodSelector';
+import { Modal } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -35,6 +37,8 @@ export default function RideSelectionScreen({ navigation }: any) {
   const [dropoff, setDropoff] = useState('');
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [isBooking, setIsBooking] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cash');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -70,9 +74,12 @@ export default function RideSelectionScreen({ navigation }: any) {
       const orderId = await createOrder({
         userId: user.uid,
         type: 'ride',
+        status: 'pending',
         pickupLocation: `${pickup}, Butuan`,
         dropoffLocation: `${dropoff}, Butuan`,
         price: calculatePrice(activeTier),
+        paymentMethod: selectedPayment,
+        paymentStatus: selectedPayment === 'cash' ? 'pending' : 'paid',
         itemDetails: `${activeTier.name} Session`,
         customerCity: user.location?.city || 'Butuan',
         customerProvince: user.location?.province || 'Agusan del Norte',
@@ -186,16 +193,57 @@ export default function RideSelectionScreen({ navigation }: any) {
 
          {/* Bottom Specifications */}
          <View style={styles.footerSpecs}>
-            <View style={styles.specItem}>
-               <Ionicons name="card-outline" size={16} color={COLORS.onSurface} />
-               <Text style={styles.specText}>Visa •••• 4412</Text>
-            </View>
+            <TouchableOpacity 
+              style={styles.specItem}
+              onPress={() => setShowPaymentModal(true)}
+            >
+               <Ionicons 
+                  name={
+                    selectedPayment === 'cash' ? 'cash-outline' : 
+                    selectedPayment === 'gcash' ? 'wallet-outline' : 
+                    selectedPayment === 'maya' ? 'card-outline' : 'card'
+                  } 
+                  size={18} 
+                  color={COLORS.primary} 
+               />
+               <Text style={styles.specText}>
+                 {selectedPayment === 'cash' ? 'Cash on Delivery' : 
+                  selectedPayment === 'gcash' ? 'GCash Pay' : 
+                  selectedPayment === 'maya' ? 'Maya Pay' : 'Credit Card'}
+               </Text>
+               <Ionicons name="chevron-forward" size={14} color="rgba(0,0,0,0.2)" />
+            </TouchableOpacity>
             <View style={styles.vDivider} />
             <View style={styles.specItem}>
                <Ionicons name="flash-outline" size={16} color={COLORS.primary} />
                <Text style={styles.specText}>Zero Surge</Text>
             </View>
          </View>
+
+         <Modal
+            visible={showPaymentModal}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setShowPaymentModal(false)}
+         >
+            <View style={styles.modalOverlay}>
+               <TouchableOpacity 
+                  style={styles.modalDismiss} 
+                  activeOpacity={1} 
+                  onPress={() => setShowPaymentModal(false)} 
+               />
+               <View style={styles.modalContent}>
+                  <View style={styles.modalHandle} />
+                  <PaymentMethodSelector 
+                    selected={selectedPayment}
+                    onSelect={(method) => {
+                      setSelectedPayment(method);
+                      setShowPaymentModal(false);
+                    }}
+                  />
+               </View>
+            </View>
+         </Modal>
 
          <Button 
             title={pickup && dropoff ? `Confirm ${activeTier.name}` : 'Select Coordinates'} 
@@ -399,5 +447,29 @@ const styles = StyleSheet.create({
     width: 1,
     height: 20,
     backgroundColor: '#E9ECEF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalDismiss: {
+    flex: 1,
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingTop: 12,
+    paddingBottom: 40,
+    maxHeight: height * 0.85,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
 });

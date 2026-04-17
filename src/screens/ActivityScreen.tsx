@@ -184,10 +184,30 @@ export default function ActivityScreen({ navigation }: any) {
                               <Ionicons name="location" size={14} color={COLORS.tertiary} />
                               <Text style={styles.locText} numberOfLines={1}>{order.dropoffLocation}</Text>
                            </View>
+                           {order.itemDetails && (
+                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                                <Ionicons name="list" size={12} color="rgba(0,0,0,0.3)" />
+                                <Text style={{ fontSize: 11, color: 'rgba(0,0,0,0.35)', fontStyle: 'italic' }} numberOfLines={1}>
+                                   {order.itemDetails}
+                                </Text>
+                             </View>
+                           )}
                         </View>
                         
                         <View style={styles.pricingSide}>
                            <Text style={styles.priceValue}>₱{order.price?.toFixed(2)}</Text>
+                           <View style={styles.paymentBadge}>
+                              <Ionicons 
+                                name={
+                                  order.paymentMethod === 'cash' ? 'cash-outline' : 
+                                  order.paymentMethod === 'gcash' ? 'wallet-outline' : 
+                                  order.paymentMethod === 'maya' ? 'card-outline' : 'card'
+                                } 
+                                size={10} 
+                                color={COLORS.primary} 
+                              />
+                              <Text style={styles.paymentMethodText}>{(order.paymentMethod || 'cash').toUpperCase()}</Text>
+                           </View>
                            <Text style={styles.dateText}>{orderDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Text>
                         </View>
                      </View>
@@ -374,7 +394,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: 'rgba(0,0,0,0.3)',
     fontWeight: '700',
+    marginTop: 4,
+  },
+  paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: `${COLORS.primary}10`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
     marginTop: 2,
+  },
+  paymentMethodText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: COLORS.primary,
   },
   cardFooter: {
     flexDirection: 'row',

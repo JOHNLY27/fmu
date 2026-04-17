@@ -184,7 +184,7 @@ export default function RiderPortalScreen({ navigation }: any) {
             
             <View style={styles.fields}>
               {activeTab === 'signup' && (
-                <Input label="FULL NAME" placeholder="Marcus J." value={name} onChangeText={setName} variant="filled" />
+                <Input label="FULL NAME" placeholder="e.g. Juan Dela Cruz" value={name} onChangeText={setName} variant="filled" />
               )}
               <Input label="EMAIL ADDRESS" placeholder="rider@fetchmeup.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" variant="filled" />
               <Input label="PASSWORD" placeholder="••••••••" value={password} onChangeText={setPassword} secureTextEntry variant="filled" />

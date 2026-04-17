@@ -14,6 +14,9 @@ import { db } from '../config/firebase';
 
 export type OrderStatus = 'pending' | 'accepted' | 'picked_up' | 'completed' | 'cancelled';
 
+export type PaymentMethod = 'cash' | 'gcash' | 'maya' | 'card';
+export type PaymentStatus = 'pending' | 'paid' | 'failed';
+
 export interface Order {
   id?: string;
   userId: string;
@@ -23,6 +26,8 @@ export interface Order {
   pickupLocation: string;
   dropoffLocation: string;
   price: number;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
   itemDetails?: string;
   customerCity?: string;
   customerProvince?: string;

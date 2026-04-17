@@ -103,14 +103,18 @@ export default function RiderDashboardScreen({ navigation }: any) {
             onPress={() => navigation.navigate('Profile')}
           >
              <View style={styles.avatar}>
-               <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'R'}</Text>
+               {user?.photoURL ? (
+                 <Image source={{ uri: user.photoURL }} style={styles.avatarImg} />
+               ) : (
+                 <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'R'}</Text>
+               )}
              </View>
              <View>
                <Text style={styles.riderName}>{user?.name || 'Professional Rider'}</Text>
                <Text style={styles.riderRating}>⭐ 4.9 Premium Fleet</Text>
              </View>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.notiBtn}>
+          <TouchableOpacity style={styles.notiBtn} onPress={() => navigation.navigate('Notifications')}>
             <Ionicons name="notifications-outline" size={22} color={COLORS.white} />
             <View style={styles.notiBadge} />
           </TouchableOpacity>
@@ -148,19 +152,27 @@ export default function RiderDashboardScreen({ navigation }: any) {
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           {/* Quick Stats Widgets */}
           <View style={styles.statsContainer}>
-            <View style={styles.revCard}>
+            <TouchableOpacity 
+              style={styles.revCard}
+              onPress={() => navigation.navigate('Earnings')}
+            >
               <LinearGradient
                 colors={['rgba(255,255,255,0.05)', 'transparent']}
                 style={styles.innerCard}
               >
-                <Text style={styles.revLabel}>TOTAL REVENUE TODAY</Text>
-                <Text style={styles.revValue}>₱{todayRevenue.toFixed(2)}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View>
+                    <Text style={styles.revLabel}>TOTAL REVENUE TODAY</Text>
+                    <Text style={styles.revValue}>₱{todayRevenue.toFixed(2)}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="rgba(0,0,0,0.1)" />
+                </View>
                 <View style={styles.revTrend}>
                   <Ionicons name="trending-up" size={12} color={COLORS.tertiary} />
-                  <Text style={styles.revTrendText}>Live Session</Text>
+                  <Text style={styles.revTrendText}>Live Session Tracking</Text>
                 </View>
               </LinearGradient>
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.smallStatsRow}>
               <View style={styles.smallStatCard}>
@@ -252,14 +264,23 @@ export default function RiderDashboardScreen({ navigation }: any) {
 
       {/* Control Strip */}
       <View style={styles.controlStrip}>
-        <TouchableOpacity style={styles.controlBtn}>
+        <TouchableOpacity 
+          style={styles.controlBtn} 
+          onPress={() => navigation.navigate('RiderSettings', { section: 'payout' })}
+        >
           <Ionicons name="wallet-outline" size={24} color={COLORS.white} />
           <Text style={styles.controlText}>Payouts</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.mapCenterBtn} onPress={() => navigation.navigate('GenericContent', { title: 'Navigation' })}>
+        <TouchableOpacity 
+          style={styles.mapCenterBtn} 
+          onPress={() => navigation.navigate('Jobs')}
+        >
           <Ionicons name="map" size={30} color={COLORS.white} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.controlBtn}>
+        <TouchableOpacity 
+          style={styles.controlBtn}
+          onPress={() => navigation.navigate('RiderSettings', { section: 'personal' })}
+        >
           <Ionicons name="settings-outline" size={24} color={COLORS.white} />
           <Text style={styles.controlText}>Settings</Text>
         </TouchableOpacity>
@@ -306,6 +327,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     color: COLORS.white,
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
   },
   riderName: {
     fontSize: 16,
@@ -581,7 +607,7 @@ const styles = StyleSheet.create({
   },
   controlStrip: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 100, // Adjusted to avoid collision with Bottom Tab Bar
     left: 20,
     right: 20,
     height: 80,

@@ -48,11 +48,11 @@ export default function RiderProfileScreen({ navigation }: any) {
   };
 
   const menuItems = [
-    { title: 'Personal Information', icon: 'person-outline', sub: 'Name, email, and phone' },
-    { title: 'Vehicle Management', icon: 'bicycle-outline', sub: 'Documents and registration' },
-    { title: 'Payout Settings', icon: 'wallet-outline', sub: 'Bank accounts and billing' },
-    { title: 'Security & Access', icon: 'shield-checkmark-outline', sub: 'Password and 2FA' },
-    { title: 'App Preferences', icon: 'settings-outline', sub: 'Language, notifications' },
+    { title: 'Personal Information', icon: 'person-outline', sub: 'Name, phone and avatar', section: 'personal' },
+    { title: 'Vehicle Management', icon: 'bicycle-outline', sub: 'Fleet data and registration', section: 'vehicle' },
+    { title: 'Payout Settings', icon: 'wallet-outline', sub: 'Wallet (GCash/Maya) linkages', section: 'payout' },
+    { title: 'Security & Access', icon: 'shield-checkmark-outline', sub: 'Password and re-auth', screen: 'ChangePassword' },
+    { title: 'App Preferences', icon: 'settings-outline', sub: 'Device and system alerts', screen: 'PrivacySecurity' },
   ];
 
   return (
@@ -78,7 +78,11 @@ export default function RiderProfileScreen({ navigation }: any) {
            <View style={styles.heroContent}>
               <View style={styles.avatarContainer}>
                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'R'}</Text>
+                    {user?.photoURL ? (
+                      <Image source={{ uri: user.photoURL }} style={styles.avatarImg} />
+                    ) : (
+                      <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'R'}</Text>
+                    )}
                  </View>
                  <View style={styles.verifyBadge}>
                     <Ionicons name="shield-checkmark" size={14} color={COLORS.white} />
@@ -89,7 +93,7 @@ export default function RiderProfileScreen({ navigation }: any) {
               <View style={styles.idRow}>
                  <Text style={styles.userId}>UID: {user?.uid?.substring(0, 10).toUpperCase()}</Text>
                  <View style={styles.dot} />
-                 <Text style={styles.userTier}>PLATINUM TIER</Text>
+                 <Text style={styles.userTier}>{completedCount >= 50 ? 'ELITE FLEET' : completedCount >= 20 ? 'MASTER RIDER' : 'ACTIVE AGENT'}</Text>
               </View>
            </View>
         </View>
@@ -108,7 +112,11 @@ export default function RiderProfileScreen({ navigation }: any) {
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                 <Text style={styles.statValue}>1.4y</Text>
+                 <Text style={styles.statValue}>{(() => {
+                   const created = user?.createdAt?.seconds ? new Date(user.createdAt.seconds * 1000) : new Date();
+                   const diff = Math.max(1, Math.floor((new Date().getTime() - created.getTime()) / (1000 * 60 * 60 * 24)));
+                   return `${diff}d`;
+                 })()}</Text>
                  <Text style={styles.statLabel}>TENURE</Text>
               </View>
            </View>
@@ -125,7 +133,7 @@ export default function RiderProfileScreen({ navigation }: any) {
                     <TouchableOpacity 
                       key={idx} 
                       style={[styles.menuItem, idx === menuItems.length - 1 && styles.lastMenuItem]}
-                      onPress={() => navigation.navigate('GenericContent', { title: item.title })}
+                      onPress={() => item.screen ? navigation.navigate(item.screen) : navigation.navigate('RiderSettings', { section: item.section })}
                     >
                        <View style={styles.menuIconBox}>
                           <Ionicons name={item.icon as any} size={20} color={COLORS.onSurface} />
@@ -143,19 +151,29 @@ export default function RiderProfileScreen({ navigation }: any) {
                  <Text style={styles.sectionTitle}>SERVICE COMPLIANCE</Text>
               </View>
 
-              <TouchableOpacity style={styles.complianceCard}>
-                 <View style={styles.complianceHeader}>
-                    <Ionicons name="document-lock-outline" size={24} color={COLORS.primary} />
-                    <View>
-                       <Text style={styles.complianceTitle}>Verification Center</Text>
-                       <Text style={styles.complianceSub}>3 documents require annual update</Text>
-                    </View>
-                 </View>
-                 <View style={styles.progressTrack}>
-                    <View style={styles.progressFill} />
-                 </View>
-                 <Text style={styles.progressText}>85% Profile Strength</Text>
-              </TouchableOpacity>
+               <TouchableOpacity style={styles.complianceCard} onPress={() => navigation.navigate('VerificationCenter')}>
+                  <View style={styles.complianceHeader}>
+                     <Ionicons name="document-lock-outline" size={24} color={COLORS.primary} />
+                     <View>
+                        <Text style={styles.complianceTitle}>Verification Center</Text>
+                        <Text style={styles.complianceSub}>
+                          {Object.keys(user?.requirements || {}).filter(k => k.endsWith('Status') && user?.requirements[k] === 'pending').length} pending reviews
+                        </Text>
+                     </View>
+                  </View>
+                  {(() => {
+                    const approved = Object.keys(user?.requirements || {}).filter(k => k.endsWith('Status') && user?.requirements[k] === 'approved').length;
+                    const strength = Math.round((approved / 3) * 100);
+                    return (
+                      <>
+                        <View style={styles.progressTrack}>
+                           <View style={[styles.progressFill, { width: `${strength || 5}%` }]} />
+                        </View>
+                        <Text style={styles.progressText}>{strength}% Profile Strength</Text>
+                      </>
+                    );
+                  })()}
+               </TouchableOpacity>
 
               <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                  <Text style={styles.logoutText}>TERMINATE SESSION</Text>
@@ -215,6 +233,11 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '900',
     color: COLORS.white,
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 45,
   },
   verifyBadge: {
     position: 'absolute',
@@ -377,7 +400,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   progressFill: {
-    width: '85%',
     height: '100%',
     backgroundColor: COLORS.primary,
     borderRadius: 3,

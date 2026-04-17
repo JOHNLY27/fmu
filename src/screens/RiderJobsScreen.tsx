@@ -203,6 +203,23 @@ export default function RiderJobsScreen({ navigation }: any) {
                          <Text style={styles.footerPrice}>₱{job.price?.toFixed(2)}</Text>
                       </View>
 
+                      <View style={[
+                        styles.collectionBadge,
+                        job.paymentMethod === 'cash' ? styles.collectionCash : styles.collectionDigital
+                      ]}>
+                         <Ionicons 
+                           name={job.paymentMethod === 'cash' ? 'cash' : 'card'} 
+                           size={12} 
+                           color={job.paymentMethod === 'cash' ? '#166534' : COLORS.primary} 
+                         />
+                         <Text style={[
+                           styles.collectionText,
+                           job.paymentMethod === 'cash' ? { color: '#166534' } : { color: COLORS.primary }
+                         ]}>
+                           {job.paymentMethod === 'cash' ? 'COLLECT CASH' : 'DIGITAL PAY'}
+                         </Text>
+                      </View>
+
                       {activeTab === 'active' && (
                         <View style={styles.actionGroup}>
                           <TouchableOpacity 
@@ -508,5 +525,26 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: COLORS.white,
     letterSpacing: 1,
+  },
+  collectionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: 'flex-end',
+    marginBottom: 4,
+  },
+  collectionCash: {
+    backgroundColor: '#dcfce7',
+  },
+  collectionDigital: {
+    backgroundColor: `${COLORS.primary}10`,
+  },
+  collectionText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
 });

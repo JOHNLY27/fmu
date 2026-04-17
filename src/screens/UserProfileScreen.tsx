@@ -50,16 +50,16 @@ export default function UserProfileScreen({ navigation }: any) {
     {
       title: 'PERSONALIZATION',
       items: [
-        { icon: 'location-outline', label: 'Manage Addresses', sub: user?.location?.city || 'Set location' },
-        { icon: 'heart-outline', label: 'Favorite Stores' },
-        { icon: 'notifications-outline', label: 'Notification Settings' },
+        { icon: 'person-outline', label: 'Identity Profile', sub: user?.name, screen: 'ProfileEdit' },
+        { icon: 'location-outline', label: 'Default Mission Zone', sub: user?.location?.barangay || 'Set home area', screen: 'ProfileEdit' },
+        { icon: 'notifications-outline', label: 'App Preferences', screen: 'ProfileEdit' },
       ]
     },
     {
       title: 'PREFERENCES',
       items: [
-        { icon: 'shield-checkmark-outline', label: 'Privacy & Security' },
-        { icon: 'help-circle-outline', label: 'Help & Support' },
+        { icon: 'shield-checkmark-outline', label: 'Privacy & Security', screen: 'PrivacySecurity' },
+        { icon: 'help-circle-outline', label: 'Help & Support', screen: 'HelpSupport' },
       ]
     }
   ];
@@ -87,7 +87,11 @@ export default function UserProfileScreen({ navigation }: any) {
            <View style={styles.heroContent}>
               <View style={styles.avatarContainer}>
                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'U'}</Text>
+                    {user?.photoURL ? (
+                      <Image source={{ uri: user.photoURL }} style={styles.avatarImg} />
+                    ) : (
+                      <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'U'}</Text>
+                    )}
                  </View>
                  <View style={styles.identityBadge}>
                     <Ionicons name="checkmark-seal" size={16} color={COLORS.white} />
@@ -200,6 +204,11 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '900',
     color: COLORS.white,
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 38,
   },
   identityBadge: {
     position: 'absolute',

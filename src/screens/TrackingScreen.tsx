@@ -96,9 +96,9 @@ export default function TrackingScreen({ navigation, route }: any) {
             </View>
             <View>
                <Text style={styles.runnerRole}>PREMIUM RUNNER</Text>
-               <Text style={styles.runnerName}>{order?.status === 'pending' ? 'Matching...' : 'Marcus J.'}</Text>
+               <Text style={styles.runnerName}>{order?.status === 'pending' || !order?.riderName ? 'Assigning Runner...' : order.riderName}</Text>
             </View>
-            <TouchableOpacity style={styles.callBtn}>
+            <TouchableOpacity style={styles.callBtn} disabled={order?.status === 'pending'}>
                <Ionicons name="call" size={18} color={COLORS.white} />
             </TouchableOpacity>
          </View>
@@ -131,7 +131,7 @@ export default function TrackingScreen({ navigation, route }: any) {
          <View style={styles.progressSection}>
             {[
               { id: 0, label: 'Order Validated', sub: 'Coordinates received' },
-              { id: 1, label: 'Runner Assignment', sub: 'Marcus is en-route to pickup' },
+              { id: 1, label: 'Runner Assignment', sub: order?.riderName ? `${order.riderName} is preparing mission` : 'Matching closest agent' },
               { id: 2, label: 'En-Route', sub: 'Fetch in progress' },
               { id: 3, label: 'Secured Delivery', sub: 'Handled with care' },
             ].map((step, i) => (

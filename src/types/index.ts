@@ -60,18 +60,12 @@ export interface Message {
 }
 
 export type StoreCategory = 
-  | 'All'
-  | 'Restaurant'
-  | 'Grocery'
   | 'Pharmacy'
-  | 'Hardware'
-  | 'Electronics'
-  | 'Bakery'
-  | 'Cafe'
-  | 'Sari-Sari'
-  | 'Market'
-  | 'Clothing'
-  | 'Pet Shop'
+  | 'Convenience'
+  | 'Grocery'
+  | 'Personal Care'
+  | 'Pay Bills'
+  | 'All'
   | 'Others';
 
 export interface Store {

@@ -18,10 +18,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import Button from '../components/ui/Button';
 import BarangaySelector from '../components/ui/BarangaySelector';
-import { createOrder } from '../services/orderService';
+import { createOrder, PaymentMethod } from '../services/orderService';
 import { useAuth } from '../context/AuthContext';
+import PaymentMethodSelector from '../components/ui/PaymentMethodSelector';
+import { Modal } from 'react-native';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const sizes = [
   { key: 'small', label: 'LITE', icon: 'document-text', desc: 'Docs, Keys, Parcels', price: 60 },
@@ -36,6 +38,8 @@ export default function ParcelDeliveryScreen({ navigation }: any) {
   const [itemDetails, setItemDetails] = useState('');
   const [parcelSize, setParcelSize] = useState('small');
   const [isBooking, setIsBooking] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cash');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -59,9 +63,12 @@ export default function ParcelDeliveryScreen({ navigation }: any) {
       const orderId = await createOrder({
         userId: user?.uid || '',
         type: 'parcel',
+        status: 'pending',
         pickupLocation: `${pickup}, Butuan`,
         dropoffLocation: `${dropoff}, Butuan`,
         price: currentPrice,
+        paymentMethod: selectedPayment,
+        paymentStatus: selectedPayment === 'cash' ? 'pending' : 'paid',
         itemDetails: `Parcel Session: ${itemDetails} (${parcelSize.toUpperCase()})`,
         customerCity: user?.location?.city || 'Butuan',
         customerProvince: user?.location?.province || 'Agusan del Norte',
@@ -168,6 +175,29 @@ export default function ParcelDeliveryScreen({ navigation }: any) {
                      <Text style={styles.sumLabel}>ESTIMATED LOGISTICS FEE</Text>
                      <Text style={styles.sumVal}>₱{currentPrice.toFixed(2)}</Text>
                   </View>
+                  
+                  {/* Payment Selector Trigger */}
+                  <TouchableOpacity 
+                    style={styles.paymentTrigger} 
+                    onPress={() => setShowPaymentModal(true)}
+                  >
+                     <Ionicons 
+                        name={
+                          selectedPayment === 'cash' ? 'cash-outline' : 
+                          selectedPayment === 'gcash' ? 'wallet-outline' : 
+                          selectedPayment === 'maya' ? 'card-outline' : 'card'
+                        } 
+                        size={16} 
+                        color={COLORS.white} 
+                     />
+                     <Text style={styles.paymentText}>
+                       {selectedPayment === 'cash' ? 'Cash on Delivery' : 
+                        selectedPayment === 'gcash' ? 'GCash' : 
+                        selectedPayment === 'maya' ? 'Maya' : 'Card'}
+                     </Text>
+                     <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.4)" />
+                  </TouchableOpacity>
+
                   <Button 
                      title={isBooking ? "Executing Mission..." : "Initiate Dispatch"} 
                      onPress={handleSendParcel}
@@ -185,6 +215,32 @@ export default function ParcelDeliveryScreen({ navigation }: any) {
             </Animated.View>
          </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Payment Selection Modal */}
+      <Modal
+        visible={showPaymentModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPaymentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalDismiss} 
+            activeOpacity={1} 
+            onPress={() => setShowPaymentModal(false)} 
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <PaymentMethodSelector 
+              selected={selectedPayment}
+              onSelect={(method) => {
+                setSelectedPayment(method);
+                setShowPaymentModal(false);
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -396,5 +452,45 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.4)',
+  },
+  paymentTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    marginBottom: 20,
+    gap: 12,
+  },
+  paymentText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalDismiss: {
+    flex: 1,
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingTop: 12,
+    paddingBottom: 40,
+    maxHeight: height * 0.85,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
 });

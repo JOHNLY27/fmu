@@ -28,6 +28,17 @@ import RiderEarningsScreen from '../screens/RiderEarningsScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 import GenericContentScreen from '../screens/GenericContentScreen';
 import AddressEditScreen from '../screens/AddressEditScreen';
+import ProfileEditScreen from '../screens/ProfileEditScreen';
+import PrivacySecurityScreen from '../screens/PrivacySecurityScreen';
+import HelpSupportScreen from '../screens/HelpSupportScreen';
+import RestaurantMenuScreen from '../screens/RestaurantMenuScreen';
+import FoodCheckoutScreen from '../screens/FoodCheckoutScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import RiderSettingsScreen from '../screens/RiderSettingsScreen';
+import RiderApprovalWaitingScreen from '../screens/RiderApprovalWaitingScreen';
+import BannedScreen from '../screens/BannedScreen';
+import VerificationCenterScreen from '../screens/VerificationCenterScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -123,11 +134,17 @@ export default function AppNavigator() {
             animation: 'slide_from_right',
           }}
         >
-          {user.role === 'rider' ? (
-            <>
-              <Stack.Screen name="RiderTabs" component={RiderTabs} />
-              <Stack.Screen name="RiderDashboard" component={RiderDashboardScreen} />
-            </>
+          {user.status === 'banned' ? (
+            <Stack.Screen name="Banned" component={BannedScreen} />
+          ) : user.role === 'rider' ? (
+            user.status === 'pending' ? (
+               <Stack.Screen name="RiderApprovalWaiting" component={RiderApprovalWaitingScreen} />
+            ) : (
+               <>
+                 <Stack.Screen name="RiderTabs" component={RiderTabs} />
+                 <Stack.Screen name="RiderDashboard" component={RiderDashboardScreen} />
+               </>
+            )
           ) : (
             <>
               <Stack.Screen name="MainTabs" component={UserTabs} />
@@ -144,6 +161,15 @@ export default function AppNavigator() {
           <Stack.Screen name="PabiliOrder" component={PabiliOrderScreen} />
           <Stack.Screen name="AddressEdit" component={AddressEditScreen} />
           <Stack.Screen name="GenericContent" component={GenericContentScreen} />
+          <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
+          <Stack.Screen name="PrivacySecurity" component={PrivacySecurityScreen} />
+          <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+          <Stack.Screen name="RestaurantMenu" component={RestaurantMenuScreen} />
+          <Stack.Screen name="FoodCheckout" component={FoodCheckoutScreen} />
+          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+          <Stack.Screen name="RiderSettings" component={RiderSettingsScreen} />
+          <Stack.Screen name="VerificationCenter" component={VerificationCenterScreen} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
         </Stack.Navigator>
       ) : (
         // Unauthenticated / auth flow

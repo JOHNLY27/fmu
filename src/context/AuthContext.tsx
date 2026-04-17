@@ -6,8 +6,11 @@ import {
   signOut as firebaseSignOut,
   User as FirebaseUser,
   updateProfile,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { User, UserLocation, RiderRequirements } from '../types';
 
@@ -18,6 +21,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string, role?: 'user' | 'rider', location?: UserLocation, requirements?: RiderRequirements) => Promise<void>;
   signOut: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -37,27 +41,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+    let unsubDoc: (() => void) | null = null;
+
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+      // Clear previous listener if it exists
+      if (unsubDoc) {
+        unsubDoc();
+        unsubDoc = null;
+      }
+
       if (fbUser) {
         setFirebaseUser(fbUser);
-        // Fetch user profile from Firestore
-        try {
-          const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
-          if (userDoc.exists()) {
-            setUser({ uid: fbUser.uid, ...(userDoc.data() as User) });
+        // Fetch user profile from Firestore with real-time listener
+        unsubDoc = onSnapshot(doc(db, 'users', fbUser.uid), (docSnap) => {
+          if (docSnap.exists()) {
+            setUser({ uid: fbUser.uid, ...(docSnap.data() as User) });
           } else {
-            setUser({ uid: fbUser.uid, name: fbUser.displayName || 'User', email: fbUser.email || '', role: 'user' });
+            setUser({ uid: fbUser.uid, name: fbUser.displayName || 'User', email: fbUser.email || '', role: 'user', status: 'approved' });
           }
-        } catch (e) {
-          setUser({ uid: fbUser.uid, name: fbUser.displayName || 'User', email: fbUser.email || '', role: 'user' });
-        }
+          setLoading(false);
+        }, (error) => {
+          console.error("Profile listen error:", error);
+          setLoading(false);
+        });
       } else {
         setFirebaseUser(null);
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribe();
+      if (unsubDoc) unsubDoc();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -100,8 +117,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    if (!auth.currentUser || !auth.currentUser.email) {
+      throw new Error('Mission interrupted: Re-authentication identity missing.');
+    }
+    
+    // Re-authenticate user first
+    const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('firebase/auth');
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+    
+    await reauthenticateWithCredential(auth.currentUser, credential);
+    await updatePassword(auth.currentUser, newPassword);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, signIn, signUp, signOut, changePassword }}>
       {children}
     </AuthContext.Provider>
   );
