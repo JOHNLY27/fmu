@@ -25,7 +25,8 @@ export const migrateStoresToCloud = async () => {
       ...BUTUAN_STORES.map(s => ({ ...s, role: 'store' }))
     ];
 
-    // 3. Selective Injection
+    /* 
+    // 3. Selective Injection (DISABLED: Use Admin Hub for all merchant management)
     let migratedCount = 0;
     for (const store of allStores) {
       if (existingNames.has(store.name)) continue;
@@ -44,6 +45,7 @@ export const migrateStoresToCloud = async () => {
       migratedCount++;
       console.log(`--- SYNC: [${data.name}] DEPLOYED ---`);
     }
+    */
 
     // 4. Seed Categories if empty
     const catSnap = await getDocs(collection(db, 'categories'));

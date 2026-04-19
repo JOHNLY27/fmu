@@ -8,8 +8,9 @@ import { migrateStoresToCloud } from './src/services/migrationService';
 
 export default function App() {
   useEffect(() => {
-    // Synchronize local store silos with cloud database
-    migrateStoresToCloud();
+    // Cloud migration is now complete. 
+    // Manual sync only needed for future data shifts.
+    // migrateStoresToCloud();
   }, []);
 
   return (

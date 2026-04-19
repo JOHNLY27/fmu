@@ -39,6 +39,11 @@ import RiderApprovalWaitingScreen from '../screens/RiderApprovalWaitingScreen';
 import BannedScreen from '../screens/BannedScreen';
 import VerificationCenterScreen from '../screens/VerificationCenterScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import WalletScreen from '../screens/WalletScreen';
+import SendMoneyScreen from '../screens/SendMoneyScreen';
+import ScanQRScreen from '../screens/ScanQRScreen';
+import BillsPaymentScreen from '../screens/BillsPaymentScreen';
+import ReceiptScreen from '../screens/ReceiptScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -170,6 +175,11 @@ export default function AppNavigator() {
           <Stack.Screen name="RiderSettings" component={RiderSettingsScreen} />
           <Stack.Screen name="VerificationCenter" component={VerificationCenterScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
+          <Stack.Screen name="Wallet" component={WalletScreen} />
+          <Stack.Screen name="SendMoney" component={SendMoneyScreen} />
+          <Stack.Screen name="ScanQR" component={ScanQRScreen} />
+          <Stack.Screen name="BillsPayment" component={BillsPaymentScreen} />
+          <Stack.Screen name="Receipt" component={ReceiptScreen} />
         </Stack.Navigator>
       ) : (
         // Unauthenticated / auth flow

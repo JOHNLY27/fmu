@@ -17,13 +17,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import Button from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
-import { subscribeToAvailableJobs, subscribeToRiderJobs, Order, acceptOrder } from '../services/orderService';
+import { subscribeToAvailableJobs, subscribeToRiderJobs, Order, acceptOrder, updateOrderStatus } from '../services/orderService';
+import { startRiderLocationTracking, stopRiderLocationTracking } from '../services/locationService';
 
 const { width } = Dimensions.get('window');
 
 export default function RiderDashboardScreen({ navigation }: any) {
   const { user } = useAuth();
   const [jobs, setJobs] = useState<Order[]>([]);
+  const [activeJob, setActiveJob] = useState<Order | null>(null);
   const [myCompletedJobs, setMyCompletedJobs] = useState<Order[]>([]);
   const [isOnline, setIsOnline] = useState(true);
   
@@ -35,6 +37,15 @@ export default function RiderDashboardScreen({ navigation }: any) {
     if (!user?.uid) return;
     const unsub = subscribeToRiderJobs(user.uid, (data) => {
       setMyCompletedJobs(data.filter(j => j.status === 'completed'));
+      
+      const active = data.find(j => j.status === 'accepted' || j.status === 'picked_up');
+      setActiveJob(active || null);
+      
+      if (active) {
+        startRiderLocationTracking(active.id!);
+      } else {
+        stopRiderLocationTracking();
+      }
     });
     
     Animated.parallel([
@@ -42,7 +53,10 @@ export default function RiderDashboardScreen({ navigation }: any) {
       Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 7, useNativeDriver: true }),
     ]).start();
 
-    return () => unsub();
+    return () => {
+      unsub();
+      stopRiderLocationTracking();
+    };
   }, [user]);
 
   useEffect(() => {
@@ -64,11 +78,14 @@ export default function RiderDashboardScreen({ navigation }: any) {
   };
 
   const handleAcceptJob = async (orderId: string) => {
-    if (!user) return;
+    if (!user || activeJob) {
+      Alert.alert("Mission Overload", "Complete your current mission before taking a new one.");
+      return;
+    }
     try {
       const success = await acceptOrder(orderId, user.uid);
       if (success) {
-        Alert.alert("Assignment Confirmed", "Mission started. Proceed to pickup.", [
+        Alert.alert("Assignment Confirmed", "Mission started. GPS Pulse active.", [
           { text: "View Details", onPress: () => navigation.navigate('TrackingDetail', { orderId }) }
         ]);
       } else {
@@ -79,11 +96,30 @@ export default function RiderDashboardScreen({ navigation }: any) {
     }
   };
 
+  const handleUpdateStatus = async (status: 'picked_up' | 'completed') => {
+    if (!activeJob?.id) return;
+    try {
+      await updateOrderStatus(activeJob.id, status);
+      if (status === 'completed') {
+        Alert.alert("Mission Success", "Reward added to your earnings.");
+      }
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
   const todayRevenue = (() => {
     const today = new Date();
     return myCompletedJobs.filter(j => {
       if (!j.createdAt) return false;
-      const d = new Date(typeof j.createdAt === 'string' ? j.createdAt : (j.createdAt.seconds * 1000));
+      let d: Date;
+      if (typeof j.createdAt === 'string') {
+        d = new Date(j.createdAt);
+      } else if (j.createdAt && j.createdAt.seconds) {
+        d = new Date(j.createdAt.seconds * 1000);
+      } else {
+        return false; // Skip if timestamp is still resolving
+      }
       return d.getDate() === today.getDate() && d.getMonth() === today.getMonth();
     }).reduce((sum, j) => sum + (j.price || 0), 0);
   })();
@@ -150,6 +186,47 @@ export default function RiderDashboardScreen({ navigation }: any) {
         bounces={false}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          {/* Active Mission Card */}
+          {activeJob && (
+            <View style={styles.activeJobContainer}>
+               <LinearGradient colors={[COLORS.primary, '#E65100']} style={styles.activeJobCard}>
+                  <View style={styles.activeHeader}>
+                    <View style={styles.liveBadge}>
+                       <View style={styles.pulseDot} />
+                       <Text style={styles.liveBadgeText}>LIVE MISSION</Text>
+                    </View>
+                    <Text style={styles.activePrice}>₱{activeJob.price?.toFixed(2)}</Text>
+                  </View>
+                  
+                  <View style={styles.activeDetails}>
+                     <Text style={styles.activeRouteLabel}>CURRENT DESTINATION</Text>
+                     <Text style={styles.activeRouteText} numberOfLines={1}>
+                        {activeJob.status === 'accepted' ? activeJob.pickupLocation : activeJob.dropoffLocation}
+                     </Text>
+                  </View>
+
+                  <View style={styles.activeActions}>
+                     <TouchableOpacity 
+                        style={styles.activeMainBtn}
+                        onPress={() => handleUpdateStatus(activeJob.status === 'accepted' ? 'picked_up' : 'completed')}
+                     >
+                        <Text style={styles.activeMainBtnText}>
+                           {activeJob.status === 'accepted' ? 'CONFIRM PICKUP' : 'COMPLETE DELIVERY'}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+                     </TouchableOpacity>
+                     
+                     <TouchableOpacity 
+                        style={styles.activeSideBtn}
+                        onPress={() => navigation.navigate('TrackingDetail', { orderId: activeJob.id })}
+                     >
+                        <Ionicons name="map-outline" size={20} color={COLORS.white} />
+                     </TouchableOpacity>
+                  </View>
+               </LinearGradient>
+            </View>
+          )}
+
           {/* Quick Stats Widgets */}
           <View style={styles.statsContainer}>
             <TouchableOpacity 
@@ -665,5 +742,91 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: '80%',
     lineHeight: 20,
+  },
+  activeJobContainer: {
+    marginBottom: 32,
+    marginTop: -20,
+  },
+  activeJobCard: {
+    borderRadius: 28,
+    padding: 24,
+    ...SHADOWS.lg,
+  },
+  activeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  pulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.white,
+  },
+  liveBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: COLORS.white,
+    letterSpacing: 1.5,
+  },
+  activePrice: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: COLORS.white,
+  },
+  activeDetails: {
+    marginBottom: 24,
+  },
+  activeRouteLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  activeRouteText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.white,
+  },
+  activeActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  activeMainBtn: {
+    flex: 1,
+    height: 54,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  activeMainBtnText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: COLORS.primary,
+    letterSpacing: 1,
+  },
+  activeSideBtn: {
+    width: 54,
+    height: 54,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
 });

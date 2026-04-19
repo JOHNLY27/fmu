@@ -14,21 +14,32 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { subscribeToWallet } from '../services/walletService';
 
 const { width } = Dimensions.get('window');
 
 export default function UserProfileScreen({ navigation }: any) {
   const { user, signOut } = useAuth();
+  const [balance, setBalance] = React.useState(0);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
+    let unsubWallet = () => {};
+    if (user?.uid) {
+      unsubWallet = subscribeToWallet(user.uid, (bal) => {
+        setBalance(bal);
+      });
+    }
+
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
     ]).start();
-  }, []);
+
+    return () => unsubWallet();
+  }, [user]);
 
   const handleLogout = async () => {
     try {
@@ -107,15 +118,14 @@ export default function UserProfileScreen({ navigation }: any) {
         </View>
 
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], marginTop: -32 }}>
-           {/* Wallet Widget */}
            <View style={styles.walletWidget}>
               <View style={styles.walletInfo}>
-                 <Text style={styles.walletLabel}>FETCH COINS</Text>
-                 <Text style={styles.walletValue}>2,480.00</Text>
+                 <Text style={styles.walletLabel}>FETCHPAY BALANCE</Text>
+                 <Text style={styles.walletValue}>₱ {balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
               </View>
               <View style={styles.walletDivider} />
-              <TouchableOpacity style={styles.topUpBtn}>
-                 <Text style={styles.topUpText}>TOP UP</Text>
+              <TouchableOpacity style={styles.topUpBtn} onPress={() => navigation.navigate('Wallet')}>
+                 <Text style={styles.topUpText}>MANAGE</Text>
               </TouchableOpacity>
            </View>
 

@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import { subscribeToUserOrders, Order } from '../services/orderService';
 import { db } from '../config/firebase';
 import { collection, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
+import { subscribeToWallet } from '../services/walletService';
 
 const { width } = Dimensions.get('window');
 
@@ -34,6 +35,7 @@ export default function HomeScreen({ navigation }: any) {
   const { user } = useAuth();
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [merchants, setMerchants] = useState<any[]>([]);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -59,18 +61,22 @@ export default function HomeScreen({ navigation }: any) {
       unsubOrders = subscribeToUserOrders(user.uid, (orders) => {
         setRecentOrders(orders.slice(0, 4));
       });
+      const unsubWallet = subscribeToWallet(user.uid, (bal) => {
+        setWalletBalance(bal);
+      });
+
+      // 3. Animations
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
+      ]).start();
+
+      return () => {
+        unsubMerchants();
+        unsubOrders();
+        unsubWallet();
+      };
     }
-
-    // 3. Animations
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
-    ]).start();
-
-    return () => {
-      unsubMerchants();
-      unsubOrders();
-    };
   }, [user]);
 
   return (
@@ -117,6 +123,22 @@ export default function HomeScreen({ navigation }: any) {
             <View style={styles.searchFilter}>
               <Ionicons name="options-outline" size={18} color={COLORS.white} />
             </View>
+          </TouchableOpacity>
+
+          {/* Quick Wallet Bar */}
+          <TouchableOpacity 
+            style={styles.walletBar} 
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Wallet')}
+          >
+             <View style={styles.walletInfo}>
+                <Ionicons name="wallet-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.walletLabel}>FetchPay Balance</Text>
+             </View>
+             <View style={styles.walletAmountBox}>
+                <Text style={styles.walletAmount}>₱ {walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                <Ionicons name="add-circle" size={20} color={COLORS.primary} />
+             </View>
           </TouchableOpacity>
         </View>
 
@@ -197,17 +219,38 @@ export default function HomeScreen({ navigation }: any) {
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storesScroll}>
-            {merchants.length > 0 ? merchants.slice(0, 8).map((store, i) => (
-              <TouchableOpacity key={store.id || i} style={styles.storeCard} onPress={() => navigation.navigate('StoreDirectory')}>
-                <Image source={{ uri: store.image || 'https://via.placeholder.com/400x300?text=FetchMeUp' }} style={styles.storeImg} />
-                <View style={styles.storeInfo}>
-                  <Text style={styles.storeName}>{store.name}</Text>
-                  <Text style={styles.storeType}>{store.category}</Text>
-                </View>
-              </TouchableOpacity>
+            {merchants.length > 0 ? merchants.map((store, i) => (
+              <Animated.View key={store.id || i} style={[styles.storeCard, { opacity: fadeAnim }]}>
+                <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('StoreDirectory')}>
+                  <View style={[styles.storeImgContainer, { backgroundColor: `${store.color || COLORS.primary}10` }]}>
+                    {store.image ? (
+                      <Image 
+                        source={{ uri: store.image }} 
+                        style={styles.storeImg} 
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Ionicons name="storefront" size={32} color={COLORS.primary} style={{ opacity: 0.2 }} />
+                    )}
+                  </View>
+                  <View style={styles.storeInfo}>
+                    <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
+                    <View style={styles.storeTagLine}>
+                      <Ionicons name="star" size={10} color={COLORS.warning} />
+                      <Text style={styles.storeType}> {store.category}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
             )) : (
               [1, 2, 3].map(i => (
-                <View key={i} style={[styles.storeCard, { backgroundColor: '#F1F3F5', height: 160 }]} />
+                <View key={i} style={[styles.storeCard, { backgroundColor: '#F8F9FA', height: 160, opacity: 0.6 }]}>
+                   <View style={{ height: 100, backgroundColor: '#E9ECEF' }} />
+                   <View style={{ padding: 12 }}>
+                     <View style={{ height: 12, backgroundColor: '#E9ECEF', width: '80%', borderRadius: 4, marginBottom: 8 }} />
+                     <View style={{ height: 8, backgroundColor: '#E9ECEF', width: '40%', borderRadius: 4 }} />
+                   </View>
+                </View>
               ))
             )}
           </ScrollView>
@@ -322,6 +365,39 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.onSurface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  walletBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
+    ...SHADOWS.sm,
+    borderWidth: 1,
+    borderColor: '#F1F3F5',
+  },
+  walletInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  walletLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(0,0,0,0.4)',
+  },
+  walletAmountBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  walletAmount: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORS.onSurface,
   },
   servicesGrid: {
     flexDirection: 'row',
@@ -487,9 +563,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F8F9FA',
   },
-  storeImg: {
+  storeImgContainer: {
     width: '100%',
     height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storeImg: {
+    width: '100%',
+    height: '100%',
   },
   storeInfo: {
     padding: 12,
@@ -499,11 +581,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.onSurface,
   },
+  storeTagLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
   storeType: {
     fontSize: 11,
     color: 'rgba(0,0,0,0.4)',
-    marginTop: 2,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   activityItem: {
     flexDirection: 'row',

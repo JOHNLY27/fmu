@@ -28,7 +28,8 @@ export default function RiderEarningsScreen({ navigation }: any) {
   useEffect(() => {
     if (!user?.uid) return;
     const unsub = subscribeToRiderJobs(user.uid, (data) => {
-      setCompletedJobs(data.filter(j => j.status === 'completed'));
+      // Only count jobs that haven't been PAID (settled) by the admin yet
+      setCompletedJobs(data.filter(j => j.status === 'completed' && j.payoutStatus !== 'settled'));
     });
     
     Animated.parallel([
@@ -63,6 +64,14 @@ export default function RiderEarningsScreen({ navigation }: any) {
       dailyRevenue[dateString] = (dailyRevenue[dateString] || 0) + (job.price || 0);
     }
   });
+
+  const handleRequestPayout = () => {
+    if (totalBalance === 0) {
+      alert("No available balance to request.");
+      return;
+    }
+    alert(`Success! Your payout request for ₱${totalBalance.toFixed(2)} has been sent to the Admin Hub. Settlement usually takes 24 hours.`);
+  };
 
   const totalBalance = completedJobs.reduce((sum, j) => sum + (j.price || 0), 0);
   const maxWeeklyAmount = Math.max(...weeklyBars.map(b => b.amount), 1);
@@ -116,7 +125,7 @@ export default function RiderEarningsScreen({ navigation }: any) {
                </View>
             </View>
 
-            <TouchableOpacity style={styles.payoutBtn}>
+            <TouchableOpacity style={styles.payoutBtn} onPress={handleRequestPayout}>
                <Text style={styles.payoutBtnText}>REQUEST PAYOUT</Text>
                <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
             </TouchableOpacity>

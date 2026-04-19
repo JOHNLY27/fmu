@@ -10,7 +10,9 @@ import {
   Animated,
   Dimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
@@ -68,14 +70,61 @@ export default function TrackingScreen({ navigation, route }: any) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
-      {/* Immersive Map Background */}
+      {/* Immersive Live Map */}
       <View style={styles.mapContainer}>
-         <Image 
-          source={{ uri: 'https://images.unsplash.com/photo-1569336415962-a4bd9f6dfc0f?w=800&fit=crop' }} 
-          style={styles.mapImage} 
-         />
+         {!order ? (
+           <View style={[styles.mapImage, { backgroundColor: '#1a202c', justifyContent: 'center' }]}>
+              <ActivityIndicator color={COLORS.primary} size="large" />
+           </View>
+         ) : (
+           <MapView
+             provider={PROVIDER_GOOGLE}
+             style={styles.mapImage}
+             customMapStyle={darkMapStyle}
+             initialRegion={{
+               latitude: 8.9472, // Default to Butuan Central
+               longitude: 125.5406,
+               latitudeDelta: 0.05,
+               longitudeDelta: 0.05,
+             }}
+             region={order.riderLocation ? {
+               latitude: order.riderLocation.latitude,
+               longitude: order.riderLocation.longitude,
+               latitudeDelta: 0.02,
+               longitudeDelta: 0.02,
+             } : undefined}
+           >
+             {/* Rider Marker */}
+             {order.riderLocation && (
+               <Marker
+                 coordinate={{
+                   latitude: order.riderLocation.latitude,
+                   longitude: order.riderLocation.longitude,
+                 }}
+                 anchor={{ x: 0.5, y: 0.5 }}
+               >
+                 <View style={styles.riderMarker}>
+                    <View style={styles.riderMarkerInner}>
+                       <Ionicons name="bicycle" size={18} color={COLORS.white} />
+                    </View>
+                    <View style={styles.riderMarkerArrow} />
+                 </View>
+               </Marker>
+             )}
+
+             {/* Destination Marker */}
+             <Marker
+               coordinate={{ latitude: 8.9450, longitude: 125.5350 }} // Placeholder target
+               title="Delivery Point"
+             >
+                <View style={styles.destMarker}>
+                   <Ionicons name="home" size={20} color={COLORS.primary} />
+                </View>
+             </Marker>
+           </MapView>
+         )}
          <LinearGradient
-          colors={['rgba(15,20,25,0.7)', 'transparent', 'rgba(15,20,25,0.4)', '#0f1419']}
+          colors={['rgba(15,20,25,0.4)', 'transparent', 'transparent', '#0f1419']}
           style={styles.mapOverlay}
          />
          
@@ -463,4 +512,62 @@ const styles = StyleSheet.create({
     color: 'rgba(0,0,0,0.25)',
     letterSpacing: 0.5,
   },
+  riderMarker: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  riderMarkerInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    borderWidth: 3,
+    borderColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.md,
+  },
+  riderMarkerArrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 8,
+    borderStyle: 'solid',
+    backgroundColor: 'transparent',
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: COLORS.white,
+    marginTop: -2,
+  },
+  destMarker: {
+     width: 40,
+     height: 40,
+     borderRadius: 20,
+     backgroundColor: COLORS.white,
+     borderWidth: 2,
+     borderColor: COLORS.primary,
+     alignItems: 'center',
+     justifyContent: 'center',
+     ...SHADOWS.md,
+  }
 });
+
+const darkMapStyle = [
+  { "elementType": "geometry", "stylers": [{ "color": "#242f3e" }] },
+  { "elementType": "labels.text.fill", "stylers": [{ "color": "#746855" }] },
+  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#242f3e" }] },
+  { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
+  { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
+  { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#263c3f" }] },
+  { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#6b9a76" }] },
+  { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] },
+  { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212a37" }] },
+  { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b3" }] },
+  { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#746855" }] },
+  { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1f2835" }] },
+  { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#f3d19c" }] },
+  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] },
+  { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#515c6d" }] },
+  { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#17263c" }] }
+];
