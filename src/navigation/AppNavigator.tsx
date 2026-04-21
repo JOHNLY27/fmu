@@ -131,20 +131,8 @@ export default function AppNavigator() {
   return (
     <NavigationContainer
       ref={navigationRef}
-      onReady={() => {
-        try {
-          console.log('Navigation ready ->', navigationRef.getCurrentRoute?.()?.name);
-        } catch (e) {
-          console.log('Navigation ready (error)', e);
-        }
-      }}
-      onStateChange={() => {
-        try {
-          console.log('Navigation state ->', navigationRef.getCurrentRoute?.()?.name);
-        } catch (e) {
-          console.log('Navigation state (error)', e);
-        }
-      }}
+      onReady={() => {}}
+      onStateChange={() => {}}
     >
       {user ? (
         // Authenticated app stack
