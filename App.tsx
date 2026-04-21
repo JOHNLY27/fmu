@@ -1,41 +1,64 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { LogBox } from 'react-native';
+import { LogBox, View, StyleSheet } from 'react-native';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
-import { migrateStoresToCloud } from './src/services/migrationService';
-
+import IntroScreen from './src/components/IntroScreen';
 import * as SplashScreen from 'expo-splash-screen';
 
-// Keep the splash screen visible while we fetch resources
+// Keep the native splash visible during early boot
 SplashScreen.preventAutoHideAsync();
 
 LogBox.ignoreLogs(['@firebase/firestore: Firestore (12.12.0): BloomFilter error']);
 
 export default function App() {
+  const [appIsReady, setAppIsReady] = useState(false);
+  const [showIntro, setShowIntro] = useState(true);
+
   useEffect(() => {
-    // Artificial delay to ensure your 6MB logo has time to paint on the hardware
     const prepare = async () => {
       try {
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Fast-boot sequence: Resized assets allow for immediate handoff to the custom intro
+        await new Promise(resolve => setTimeout(resolve, 800)); 
+        setAppIsReady(true);
         await SplashScreen.hideAsync();
       } catch (e) {
-        console.warn('Splash sync error:', e);
+        console.warn('Boot Error:', e);
+        setAppIsReady(true);
       }
     };
     prepare();
   }, []);
 
+  if (!appIsReady) {
+    return null; // Keep Native Splash showing
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="auto" />
-          <AppNavigator />
+          <StatusBar style="dark" />
+          
+          <View style={styles.content}>
+            <AppNavigator />
+            
+            {showIntro && (
+              <IntroScreen onFinish={() => setShowIntro(false)} />
+            )}
+          </View>
+
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  content: {
+    flex: 1,
+    backgroundColor: '#fff4ef', // Match Intro color to prevent flickering
+  }
+});
