@@ -94,7 +94,7 @@ export default function IntroScreen({ onFinish }: IntroScreenProps) {
           <Animated.View style={[styles.loaderProgress]} />
         </View>
         <Animated.Text style={styles.versionText}>INTELLIGENT LOGISTICS v1.0.4</Animated.Text>
-      </div>
+      </View>
     </Animated.View>
   );
 }
