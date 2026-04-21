@@ -7,13 +7,25 @@ import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { migrateStoresToCloud } from './src/services/migrationService';
 
+import * as SplashScreen from 'expo-splash-screen';
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync();
+
 LogBox.ignoreLogs(['@firebase/firestore: Firestore (12.12.0): BloomFilter error']);
 
 export default function App() {
   useEffect(() => {
-    // Cloud migration is now complete. 
-    // Manual sync only needed for future data shifts.
-    // migrateStoresToCloud();
+    // Artificial delay to ensure your 6MB logo has time to paint on the hardware
+    const prepare = async () => {
+      try {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        await SplashScreen.hideAsync();
+      } catch (e) {
+        console.warn('Splash sync error:', e);
+      }
+    };
+    prepare();
   }, []);
 
   return (

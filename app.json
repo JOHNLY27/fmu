@@ -9,7 +9,7 @@
     "newArchEnabled": true,
     "scheme": "fetchmeup",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#fff4ef"
     },
@@ -37,7 +37,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "c2030179-cd92-4d1d-90be-536f0191d706"
       }
     }
   }
