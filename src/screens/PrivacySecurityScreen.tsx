@@ -52,22 +52,49 @@ export default function PrivacySecurityScreen({ navigation }: any) {
             <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('ChangePassword')}>
               <View style={styles.iconBox}><Ionicons name="key-outline" size={20} color={COLORS.primary} /></View>
               <View style={{ flex: 1, marginLeft: 16 }}>
-                 <Text style={styles.rowTitle}>Change Access Password</Text>
-                 <Text style={styles.rowSub}>Re-authentication required</Text>
+                 <Text style={styles.rowTitle}>Account Password</Text>
+                 <Text style={styles.rowSub}>Update your login credentials</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.1)" />
             </TouchableOpacity>
+            
             <View style={styles.divider} />
+            
+            <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('SetTransactionPin')}>
+              <View style={styles.iconBox}><Ionicons name="shield-checkmark-outline" size={20} color="#10B981" /></View>
+              <View style={{ flex: 1, marginLeft: 16 }}>
+                 <Text style={styles.rowTitle}>Transaction PIN</Text>
+                 <Text style={styles.rowSub}>{user?.transactionPin ? 'PIN is Active • Change PIN' : 'Unset • Setup PIN Now'}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.1)" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>BIOMETRIC OVERRIDE</Text>
+          <View style={styles.card}>
             <View style={styles.row}>
               <View style={styles.iconBox}><Ionicons name="finger-print-outline" size={20} color={COLORS.primary} /></View>
               <View style={{ flex: 1, marginLeft: 16 }}>
-                 <Text style={styles.rowTitle}>Biometric Validation</Text>
-                 <Text style={styles.rowSub}>Use FaceID or Fingerprint on login</Text>
+                 <Text style={styles.rowTitle}>Authorize with Face/Touch</Text>
+                 <Text style={styles.rowSub}>Speed up payments using biometrics</Text>
               </View>
-              <Switch value={true} trackColor={{ false: '#f1f3f5', true: COLORS.primary }} />
+              <Switch 
+                value={user?.isBiometricsEnabled || false} 
+                trackColor={{ false: '#f1f3f5', true: COLORS.primary }} 
+                onValueChange={async (val) => {
+                  if (!user?.transactionPin && val) {
+                    Alert.alert("Setup Required", "Please set a Transaction PIN first before enabling biometrics.");
+                    return;
+                  }
+                  // Service call would go here
+                }}
+              />
             </View>
           </View>
         </View>
+
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>DATA TELEMETRY</Text>

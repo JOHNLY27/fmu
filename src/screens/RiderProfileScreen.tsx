@@ -15,20 +15,37 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { subscribeToRiderJobs } from '../services/orderService';
+import { db } from '../config/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+
 
 const { width } = Dimensions.get('window');
 
 export default function RiderProfileScreen({ navigation }: any) {
   const { user, signOut } = useAuth();
   const [completedCount, setCompletedCount] = useState(0);
+  const [avgRating, setAvgRating] = useState(5.0);
+  const [reviewCount, setReviewCount] = useState(0);
+
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
     if (!user?.uid) return;
-    const unsub = subscribeToRiderJobs(user.uid, (data) => {
+    const unsubJobs = subscribeToRiderJobs(user.uid, (data) => {
       setCompletedCount(data.filter(j => j.status === 'completed').length);
+    });
+
+    // Subscribe to ratings
+    const q = query(collection(db, 'ratings'), where('targetId', '==', user.uid));
+    const unsubRatings = onSnapshot(q, (snap) => {
+      const docs = snap.docs.map(doc => doc.data());
+      if (docs.length > 0) {
+        const total = docs.reduce((acc, curr) => acc + curr.rating, 0);
+        setAvgRating(total / docs.length);
+        setReviewCount(docs.length);
+      }
     });
 
     Animated.parallel([
@@ -36,7 +53,11 @@ export default function RiderProfileScreen({ navigation }: any) {
       Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
     ]).start();
 
-    return () => unsub();
+    return () => {
+      unsubJobs();
+      unsubRatings();
+    };
+
   }, [user]);
 
   const handleLogout = async () => {
@@ -106,10 +127,16 @@ export default function RiderProfileScreen({ navigation }: any) {
                  <Text style={styles.statLabel}>MISSIONS</Text>
               </View>
               <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                 <Text style={styles.statValue}>4.9</Text>
-                 <Text style={styles.statLabel}>RATING</Text>
-              </View>
+               <View style={styles.statItem}>
+                  <TouchableOpacity 
+                    onPress={() => navigation.navigate('RiderReviews')}
+                    style={{ alignItems: 'center' }}
+                  >
+                    <Text style={styles.statValue}>{avgRating.toFixed(1)}</Text>
+                    <Text style={styles.statLabel}>{reviewCount} REVIEWS</Text>
+                  </TouchableOpacity>
+               </View>
+
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                  <Text style={styles.statValue}>{(() => {

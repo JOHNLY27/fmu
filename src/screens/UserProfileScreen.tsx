@@ -53,10 +53,13 @@ export default function UserProfileScreen({ navigation }: any) {
     {
       title: 'FINANCIAL & LOGS',
       items: [
-        { icon: 'time-outline', label: 'Order History', screen: 'Activity' },
-        { icon: 'wallet-outline', label: 'Payment Methods', sub: 'Visa •••• 4412' },
-        { icon: 'ticket-outline', label: 'Vouchers & Promos', badge: '3 NEW' },
+        { icon: 'time-outline', label: 'Order History', screen: 'OrderHistory' },
+        { icon: 'wallet-outline', label: 'Payment Methods', sub: 'Manage Wallets & Cards', screen: 'PaymentMethods' },
+        { icon: 'gift-outline', label: 'Invite Friends', sub: 'Get ₱50 for every recruit', screen: 'Referral', badge: '₱50 FREE' },
+        {icon: 'ticket-outline', label: 'Vouchers & Promos', badge: '3 NEW', screen: 'Voucher' },
+
       ]
+
     },
     {
       title: 'PERSONALIZATION',
@@ -105,8 +108,9 @@ export default function UserProfileScreen({ navigation }: any) {
                     )}
                  </View>
                  <View style={styles.identityBadge}>
-                    <Ionicons name="checkmark-seal" size={16} color={COLORS.white} />
+                    <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
                  </View>
+
               </View>
 
               <Text style={styles.userName}>{user?.name || 'Fetch User'}</Text>

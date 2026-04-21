@@ -22,7 +22,10 @@ export interface User {
   requirements?: RiderRequirements;
   avatar?: string;
   phone?: string;
+  transactionPin?: string; // Encrypted or plain for capstone
+  isBiometricsEnabled?: boolean;
 }
+
 
 export interface Restaurant {
   id: string;

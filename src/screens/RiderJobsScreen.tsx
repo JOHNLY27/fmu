@@ -10,12 +10,16 @@ import {
   Animated,
   Dimensions,
   Platform,
+  Linking,
 } from 'react-native';
+
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { subscribeToRiderJobs, updateOrderStatus, Order } from '../services/orderService';
+import { payRiderForMission } from '../services/walletService';
 import Button from '../components/ui/Button';
+
 
 const { width } = Dimensions.get('window');
 
@@ -62,11 +66,23 @@ export default function RiderJobsScreen({ navigation }: any) {
           text: "Confirm Status Update", 
           onPress: async () => {
             try {
-              await updateOrderStatus(job.id!, nextStatus);
-            } catch (e) {
-              Alert.alert("Error", "Could not synchronize with cloud.");
+              if (nextStatus === 'completed') {
+                  // Only move digital funds if NOT cash on delivery
+                  if (job.paymentMethod !== 'cash') {
+                    await payRiderForMission(job.id!, job.userId, user!.uid, job.price);
+                  } else {
+                    // It's cash, so just update the status. The rider already has the money.
+                    await updateOrderStatus(job.id!, 'completed');
+                  }
+                  Alert.alert("Mission Alpha Complete", "Your earnings have been logged.");
+              } else {
+                  await updateOrderStatus(job.id!, nextStatus);
+              }
+            } catch (e: any) {
+              Alert.alert("Transmission Error", e.message || "Could not synchronize with cloud.");
             }
           }
+
         }
       ]
     );
@@ -222,7 +238,7 @@ export default function RiderJobsScreen({ navigation }: any) {
 
                       {activeTab === 'active' && (
                         <View style={styles.actionGroup}>
-                          <TouchableOpacity 
+                           <TouchableOpacity 
                             style={styles.chatBtn}
                             onPress={() => navigation.navigate('Chat', { orderId: job.id })}
                           >
@@ -230,13 +246,27 @@ export default function RiderJobsScreen({ navigation }: any) {
                           </TouchableOpacity>
                           <TouchableOpacity 
                             style={styles.mapBtn}
-                            onPress={() => navigation.navigate('TrackingDetail', { orderId: job.id })}
+                            onPress={() => {
+                              // If we have precise coordinates, open in Native Maps
+                              if (job.dropoffCoords) {
+                                const { latitude, longitude } = job.dropoffCoords;
+                                const label = "Customer Destination";
+                                const url = Platform.select({
+                                  ios: `maps:0,0?q=${label}@${latitude},${longitude}`,
+                                  android: `geo:0,0?q=${latitude},${longitude}(${label})`
+                                });
+                                if (url) Linking.openURL(url);
+                              } else {
+                                navigation.navigate('TrackingDetail', { orderId: job.id });
+                              }
+                            }}
                           >
-                             <Ionicons name="navigate-circle" size={24} color={COLORS.white} />
+                             <Ionicons name="navigate" size={20} color={COLORS.white} />
                           </TouchableOpacity>
                         </View>
                       )}
                    </View>
+
 
                    {activeTab === 'active' && (
                      <TouchableOpacity 

@@ -16,11 +16,11 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
-import Button from '../components/ui/Button';
-import BarangaySelector from '../components/ui/BarangaySelector';
 import { createOrder, PaymentMethod } from '../services/orderService';
 import { useAuth } from '../context/AuthContext';
+import Button from '../components/ui/Button';
 import PaymentMethodSelector from '../components/ui/PaymentMethodSelector';
+
 import { Modal } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -33,8 +33,10 @@ const sizes = [
 
 export default function ParcelDeliveryScreen({ navigation }: any) {
   const { user } = useAuth();
-  const [pickup, setPickup] = useState('');
-  const [dropoff, setDropoff] = useState('');
+  const [pickupData, setPickupData] = useState<any>(null);
+  const [dropoffData, setDropoffData] = useState<any>(null);
+  const [distanceKm, setDistanceKm] = useState<number | null>(null);
+
   const [itemDetails, setItemDetails] = useState('');
   const [parcelSize, setParcelSize] = useState('small');
   const [isBooking, setIsBooking] = useState(false);
@@ -44,6 +46,31 @@ export default function ParcelDeliveryScreen({ navigation }: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
+  const getDistance = (locA: any, locB: any) => {
+    if (!locA || !locB) return null;
+    const toRad = (v: number) => (v * Math.PI) / 180;
+    const R = 6371;
+    const dLat = toRad(locB.latitude - locA.latitude);
+    const dLon = toRad(locB.longitude - locA.longitude);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(toRad(locA.latitude)) * Math.cos(toRad(locB.latitude)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return parseFloat((R * c).toFixed(2));
+  };
+
+  useEffect(() => {
+    const km = getDistance(pickupData, dropoffData);
+    setDistanceKm(km);
+  }, [pickupData, dropoffData]);
+
+  const currentPrice = () => {
+    const tier = sizes.find(s => s.key === parcelSize);
+    if (!tier) return 60;
+    if (!distanceKm) return tier.price;
+    // Add distance surcharge: ₱10 per km after 3km
+    const extra = distanceKm > 3 ? (distanceKm - 3) * 10 : 0;
+    return Math.round(tier.price + extra);
+  };
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
@@ -51,28 +78,30 @@ export default function ParcelDeliveryScreen({ navigation }: any) {
     ]).start();
   }, []);
 
-  const currentPrice = sizes.find(s => s.key === parcelSize)?.price || 60;
-
   const handleSendParcel = async () => {
-    if (!pickup || !dropoff || !itemDetails) {
-      Alert.alert('Incomplete Logistics', 'Provide pickup, destination, and item specifications to initiate transit.');
+    if (!pickupData || !dropoffData || !itemDetails) {
+      Alert.alert('Incomplete Logistics', 'Provide precise pickup, destination, and item specifications to initiate transit.');
       return;
     }
     setIsBooking(true);
+
     try {
       const orderId = await createOrder({
         userId: user?.uid || '',
         type: 'parcel',
         status: 'pending',
-        pickupLocation: `${pickup}, Butuan`,
-        dropoffLocation: `${dropoff}, Butuan`,
-        price: currentPrice,
+        pickupLocation: pickupData.address,
+        pickupCoords: { latitude: pickupData.latitude, longitude: pickupData.longitude },
+        dropoffLocation: dropoffData.address,
+        dropoffCoords: { latitude: dropoffData.latitude, longitude: dropoffData.longitude },
+        price: currentPrice(),
         paymentMethod: selectedPayment,
         paymentStatus: selectedPayment === 'cash' ? 'pending' : 'paid',
         itemDetails: `Parcel Session: ${itemDetails} (${parcelSize.toUpperCase()})`,
         customerCity: user?.location?.city || 'Butuan',
         customerProvince: user?.location?.province || 'Agusan del Norte',
       });
+
       navigation.replace('TrackingDetail', { orderId });
     } catch (e: any) {
       Alert.alert('System Error', e.message);
@@ -137,8 +166,9 @@ export default function ParcelDeliveryScreen({ navigation }: any) {
                         <Ionicons name={s.icon as any} size={28} color={parcelSize === s.key ? COLORS.white : 'rgba(0,0,0,0.2)'} />
                         <Text style={[styles.tierLabel, parcelSize === s.key && { color: COLORS.white }]}>{s.label}</Text>
                         <Text style={[styles.tierDesc, parcelSize === s.key && { color: 'rgba(255,255,255,0.6)' }]}>{s.desc}</Text>
-                        <Text style={[styles.tierPrice, parcelSize === s.key && { color: COLORS.white }]}>₱{s.price}</Text>
+                        <Text style={[styles.tierPrice, parcelSize === s.key && { color: COLORS.white }]}>₱{parcelSize === s.key ? currentPrice() : s.price}</Text>
                      </TouchableOpacity>
+
                   ))}
                </View>
 
@@ -152,29 +182,35 @@ export default function ParcelDeliveryScreen({ navigation }: any) {
                      <View style={styles.routeLine} />
                      <Ionicons name="location" size={16} color={COLORS.primary} />
                   </View>
-                  <View style={{ flex: 1, gap: 16 }}>
-                     <BarangaySelector 
-                        value={pickup} 
-                        onSelect={setPickup} 
-                        placeholder="Origin (Pickup Point)" 
-                        variant="minimal"
-                     />
-                     <View style={styles.hDivider} />
-                     <BarangaySelector 
-                        value={dropoff} 
-                        onSelect={setDropoff} 
-                        placeholder="Destination (Dropoff)" 
-                        variant="minimal"
-                     />
-                  </View>
+                   <View style={{ flex: 1, gap: 12 }}>
+                      <TouchableOpacity 
+                        onPress={() => navigation.navigate('LocationPicker', { title: 'Pickup Point', onLocationSelect: (d: any) => setPickupData(d) })}
+                      >
+                         <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(0,0,0,0.3)', marginBottom: 2 }}>PICKUP</Text>
+                         <Text style={{ fontSize: 14, fontWeight: '800', color: pickupData ? COLORS.onSurface : 'rgba(0,0,0,0.2)' }} numberOfLines={1}>
+                            {pickupData ? pickupData.address : 'Select Pick-up Location'}
+                         </Text>
+                      </TouchableOpacity>
+                      
+                      <View style={styles.hDivider} />
+                      
+                      <TouchableOpacity 
+                        onPress={() => navigation.navigate('LocationPicker', { title: 'Drop-off Point', onLocationSelect: (d: any) => setDropoffData(d) })}
+                      >
+                         <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(0,0,0,0.3)', marginBottom: 2 }}>DROPOFF</Text>
+                         <Text style={{ fontSize: 14, fontWeight: '800', color: dropoffData ? COLORS.onSurface : 'rgba(0,0,0,0.2)' }} numberOfLines={1}>
+                            {dropoffData ? dropoffData.address : 'Select Destination'}
+                         </Text>
+                      </TouchableOpacity>
+                   </View>
                </View>
 
                {/* Summary Command */}
                <View style={styles.summaryBox}>
-                  <View style={styles.sumRow}>
-                     <Text style={styles.sumLabel}>ESTIMATED LOGISTICS FEE</Text>
-                     <Text style={styles.sumVal}>₱{currentPrice.toFixed(2)}</Text>
-                  </View>
+                   <View style={styles.sumRow}>
+                      <Text style={styles.sumLabel}>ESTIMATED LOGISTICS FEE ({distanceKm || 0} KM)</Text>
+                      <Text style={styles.sumVal}>₱{currentPrice().toFixed(2)}</Text>
+                   </View>
                   
                   {/* Payment Selector Trigger */}
                   <TouchableOpacity 

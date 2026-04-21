@@ -14,22 +14,37 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { subscribeToRiderJobs, Order } from '../services/orderService';
+import { subscribeToWallet, subscribeToTransactions, Transaction } from '../services/walletService';
 import Button from '../components/ui/Button';
+
 
 const { width } = Dimensions.get('window');
 
 export default function RiderEarningsScreen({ navigation }: any) {
   const { user } = useAuth();
   const [completedJobs, setCompletedJobs] = useState<Order[]>([]);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
   const slideAnim = useRef(new Animated.Value(15)).current;
+
 
   useEffect(() => {
     if (!user?.uid) return;
-    const unsub = subscribeToRiderJobs(user.uid, (data) => {
-      // Only count jobs that haven't been PAID (settled) by the admin yet
+    
+    const unsubJobs = subscribeToRiderJobs(user.uid, (data) => {
       setCompletedJobs(data.filter(j => j.status === 'completed' && j.payoutStatus !== 'settled'));
+    });
+
+    const unsubWallet = subscribeToWallet(user.uid, (balance) => {
+      setWalletBalance(balance);
+    });
+
+    const unsubTx = subscribeToTransactions(user.uid, (txs) => {
+      setTransactions(txs);
     });
     
     Animated.parallel([
@@ -37,10 +52,16 @@ export default function RiderEarningsScreen({ navigation }: any) {
       Animated.spring(slideAnim, { toValue: 0, tension: 20, friction: 8, useNativeDriver: true }),
     ]).start();
 
-    return () => unsub();
+    return () => {
+      unsubJobs();
+      unsubWallet();
+      unsubTx();
+    };
   }, [user]);
 
-  // Aggregate data for the financial dashboard
+
+  let cashRevenueToday = 0;
+  let onlineRevenueToday = 0;
   const dailyRevenue: Record<string, number> = {};
   const weeklyBars = [
     { day: 'MON', amount: 0 },
@@ -52,28 +73,40 @@ export default function RiderEarningsScreen({ navigation }: any) {
     { day: 'SUN', amount: 0 },
   ];
 
+
   completedJobs.forEach(job => {
     if (job.createdAt) {
       const date = new Date(typeof job.createdAt === 'string' ? job.createdAt : (job.createdAt.seconds * 1000));
-      
-      const dayIndex = date.getDay(); // 0 is Sun
-      const mapping = [6, 0, 1, 2, 3, 4, 5]; // Map Sun to end of array
+      const dateString = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+      // Calculate weekly bar totals
+      const dayIndex = date.getDay();
+      const mapping = [6, 0, 1, 2, 3, 4, 5];
       weeklyBars[mapping[dayIndex]].amount += (job.price || 0);
 
-      const dateString = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      // Daily Total Revenue (Cash + Digital)
       dailyRevenue[dateString] = (dailyRevenue[dateString] || 0) + (job.price || 0);
+
+      // Split today's earnings
+      if (dateString === todayStr) {
+         if (job.paymentMethod === 'cash') cashRevenueToday += (job.price || 0);
+         else onlineRevenueToday += (job.price || 0);
+      }
     }
   });
 
+
   const handleRequestPayout = () => {
-    if (totalBalance === 0) {
+    if (walletBalance === 0) {
       alert("No available balance to request.");
       return;
     }
-    alert(`Success! Your payout request for ₱${totalBalance.toFixed(2)} has been sent to the Admin Hub. Settlement usually takes 24 hours.`);
+    alert(`Success! Your payout request for ₱${walletBalance.toFixed(2)} has been sent to the Admin Hub. Settlement usually takes 24 hours.`);
   };
 
-  const totalBalance = completedJobs.reduce((sum, j) => sum + (j.price || 0), 0);
+  // const totalBalance = completedJobs.reduce((sum, j) => sum + (j.price || 0), 0);
+  const totalBalance = walletBalance;
+
   const maxWeeklyAmount = Math.max(...weeklyBars.map(b => b.amount), 1);
   const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -106,24 +139,30 @@ export default function RiderEarningsScreen({ navigation }: any) {
             <View style={styles.cardHeader}>
                <View>
                  <Text style={styles.balanceLabel}>AVAILABLE BALANCE</Text>
-                 <Text style={styles.balanceValue}>₱{totalBalance.toFixed(2)}</Text>
+                 <Text style={styles.balanceValue}>{isBalanceVisible ? `₱${totalBalance.toFixed(2)}` : '₱ ••••••'}</Text>
                </View>
-               <TouchableOpacity style={styles.eyeBtn}>
-                 <Ionicons name="eye-outline" size={20} color="rgba(255,255,255,0.4)" />
+               <TouchableOpacity 
+                  style={styles.eyeBtn}
+                  onPress={() => setIsBalanceVisible(!isBalanceVisible)}
+                >
+                 <Ionicons name={isBalanceVisible ? "eye-outline" : "eye-off-outline"} size={20} color="rgba(255,255,255,0.4)" />
                </TouchableOpacity>
             </View>
 
-            <View style={styles.cardStats}>
-               <View style={styles.cardStatItem}>
-                  <Text style={styles.cardStatLabel}>WITHDRAWABLE</Text>
-                  <Text style={styles.cardStatValue}>₱{(totalBalance * 0.9).toFixed(2)}</Text>
-               </View>
-               <View style={styles.cardStatDivider} />
-               <View style={styles.cardStatItem}>
-                  <Text style={styles.cardStatLabel}>IN ESCROW</Text>
-                  <Text style={styles.cardStatValue}>₱{(totalBalance * 0.1).toFixed(2)}</Text>
-               </View>
-            </View>
+
+             <View style={styles.cardStats}>
+                <View style={styles.cardStatItem}>
+                   <Text style={styles.cardStatLabel}>ONLINE (PAYOUT)</Text>
+                   <Text style={styles.cardStatValue}>{isBalanceVisible ? `₱${onlineRevenueToday.toFixed(2)}` : '₱ •••'}</Text>
+                </View>
+                <View style={styles.cardStatDivider} />
+                <View style={styles.cardStatItem}>
+                   <Text style={styles.cardStatLabel}>CASH (IN HAND)</Text>
+                   <Text style={styles.cardStatValue}>{isBalanceVisible ? `₱${cashRevenueToday.toFixed(2)}` : '₱ •••'}</Text>
+                </View>
+             </View>
+
+
 
             <TouchableOpacity style={styles.payoutBtn} onPress={handleRequestPayout}>
                <Text style={styles.payoutBtnText}>REQUEST PAYOUT</Text>
@@ -131,11 +170,13 @@ export default function RiderEarningsScreen({ navigation }: any) {
             </TouchableOpacity>
           </LinearGradient>
 
-          {/* Weekly Pulse Chart */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>WEEKLY PULSE</Text>
-            <TouchableOpacity><Text style={styles.seeMore}>View Full Report</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('FinancialReport', { activeTab: 'analytics' })}>
+               <Text style={styles.seeMore}>View Full Report</Text>
+            </TouchableOpacity>
           </View>
+
 
           <View style={styles.chartContainer}>
             {weeklyBars.map((bar, i) => {
@@ -182,40 +223,47 @@ export default function RiderEarningsScreen({ navigation }: any) {
              </View>
           </View>
 
-          {/* History Section */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>TRANSACTION LOG</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('GenericContent', { title: 'Full History' })}>
+            <TouchableOpacity onPress={() => navigation.navigate('FinancialReport', { activeTab: 'transactions' })}>
                <Text style={styles.seeMore}>See All</Text>
             </TouchableOpacity>
           </View>
 
-          {Object.entries(dailyRevenue).length === 0 ? (
+
+          {transactions.length === 0 ? (
             <View style={styles.emptyContainer}>
                <Ionicons name="receipt-outline" size={40} color="rgba(0,0,0,0.1)" />
                <Text style={styles.emptyText}>No financial logs available yet.</Text>
             </View>
           ) : (
-            Object.entries(dailyRevenue)
-              .sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime())
-              .map(([date, amount], idx) => (
+            transactions.slice(0, 5).map((tx, idx) => (
                 <TouchableOpacity key={idx} style={styles.transactionItem}>
-                   <View style={styles.transIcon}>
-                      <Ionicons name="wallet-outline" size={20} color={COLORS.onSurface} />
+                   <View style={[styles.transIcon, { backgroundColor: tx.type === 'credit' ? '#ECFDF5' : '#FEF2F2' }]}>
+                      <Ionicons 
+                        name={tx.type === 'credit' ? "arrow-down-outline" : "arrow-up-outline"} 
+                        size={20} 
+                        color={tx.type === 'credit' ? '#059669' : '#DC2626'} 
+                      />
                    </View>
                    <View style={styles.transInfo}>
-                      <Text style={styles.transTitle}>{date === todayStr ? 'Today' : date}</Text>
-                      <Text style={styles.transSub}>Daily settlement total</Text>
+                      <Text style={styles.transTitle}>{tx.description}</Text>
+                      <Text style={styles.transSub}>{new Date(tx.createdAt).toLocaleDateString()}</Text>
                    </View>
                    <View style={styles.transAmountBox}>
-                      <Text style={styles.transAmount}>+₱{amount.toFixed(2)}</Text>
-                      <View style={styles.statusPill}>
-                         <Text style={styles.statusText}>SETTLED</Text>
+                      <Text style={[styles.transAmount, { color: tx.type === 'credit' ? '#059669' : '#DC2626' }]}>
+                        {tx.type === 'credit' ? '+' : '-'}₱{tx.amount.toFixed(2)}
+                      </Text>
+                      <View style={[styles.statusPill, { backgroundColor: tx.type === 'credit' ? '#D1FAE5' : '#FEE2E2' }]}>
+                         <Text style={[styles.statusText, { color: tx.type === 'credit' ? '#065F46' : '#991B1B' }]}>
+                           {tx.type === 'credit' ? 'RECEIVED' : 'DEDUCTED'}
+                         </Text>
                       </View>
                    </View>
                 </TouchableOpacity>
               ))
           )}
+
 
         </Animated.View>
       </ScrollView>

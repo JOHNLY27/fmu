@@ -155,7 +155,9 @@ export default function ActivityScreen({ navigation }: any) {
             filteredOrders.map((order, idx) => {
                const isActive = ['pending', 'accepted', 'picked_up'].includes(order.status);
                const statusColor = getStatusColor(order.status);
-               const orderDate = new Date(typeof order.createdAt === 'string' ? order.createdAt : (order.createdAt.seconds * 1000));
+               const orderDate = order.createdAt?.seconds 
+                 ? new Date(order.createdAt.seconds * 1000) 
+                 : (typeof order.createdAt === 'string' ? new Date(order.createdAt) : new Date());
                
                return (
                   <TouchableOpacity 

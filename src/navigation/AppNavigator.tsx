@@ -44,6 +44,22 @@ import SendMoneyScreen from '../screens/SendMoneyScreen';
 import ScanQRScreen from '../screens/ScanQRScreen';
 import BillsPaymentScreen from '../screens/BillsPaymentScreen';
 import ReceiptScreen from '../screens/ReceiptScreen';
+import LocationPickerScreen from '../screens/LocationPickerScreen';
+import RiderReviewsScreen from '../screens/RiderReviewsScreen';
+import SetTransactionPinScreen from '../screens/SetTransactionPinScreen';
+import FinancialReportScreen from '../screens/FinancialReportScreen';
+import OrderHistoryScreen from '../screens/OrderHistoryScreen';
+import PaymentMethodsScreen from '../screens/PaymentMethodsScreen';
+import ReferralScreen from '../screens/ReferralScreen';
+import VoucherScreen from '../screens/VoucherScreen';
+
+
+
+
+
+
+
+
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -180,7 +196,23 @@ export default function AppNavigator() {
           <Stack.Screen name="ScanQR" component={ScanQRScreen} />
           <Stack.Screen name="BillsPayment" component={BillsPaymentScreen} />
           <Stack.Screen name="Receipt" component={ReceiptScreen} />
+          <Stack.Screen name="LocationPicker" component={LocationPickerScreen} />
+          <Stack.Screen name="RiderReviews" component={RiderReviewsScreen} />
+          <Stack.Screen name="SetTransactionPin" component={SetTransactionPinScreen} />
+          <Stack.Screen name="FinancialReport" component={FinancialReportScreen} />
+          <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
+          <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
+          <Stack.Screen name="Referral" component={ReferralScreen} />
+          <Stack.Screen name="Voucher" component={VoucherScreen} />
         </Stack.Navigator>
+
+
+
+
+
+
+
+
       ) : (
         // Unauthenticated / auth flow
         <Stack.Navigator

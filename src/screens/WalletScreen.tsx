@@ -9,7 +9,10 @@ import {
   Dimensions,
   Animated,
   Alert,
+  Modal,
+  Image,
 } from 'react-native';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SHADOWS, RADIUS } from '../constants/theme';
@@ -28,6 +31,8 @@ export default function WalletScreen({ navigation }: any) {
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showQR, setShowQR] = useState(false);
+
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -120,33 +125,90 @@ export default function WalletScreen({ navigation }: any) {
         </View>
       </LinearGradient>
 
-      {/* Action Grid */}
-      <View style={styles.actionGrid}>
-         <TouchableOpacity style={styles.actionItem} onPress={handleTopUp}>
-            <View style={[styles.actionIconBox, { backgroundColor: '#E3F2FD' }]}>
-               <Ionicons name="add" size={24} color="#1E88E5" />
-            </View>
-            <Text style={styles.actionLabel}>Top Up</Text>
-         </TouchableOpacity>
-         <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('SendMoney')}>
-            <View style={[styles.actionIconBox, { backgroundColor: '#F3E5F5' }]}>
-               <Ionicons name="send" size={20} color="#8E24AA" />
-            </View>
-            <Text style={styles.actionLabel}>Send</Text>
-         </TouchableOpacity>
-         <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('ScanQR')}>
-            <View style={[styles.actionIconBox, { backgroundColor: '#E8F5E9' }]}>
-               <Ionicons name="qr-code" size={20} color="#43A047" />
-            </View>
-            <Text style={styles.actionLabel}>Scan QR</Text>
-         </TouchableOpacity>
-         <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('BillsPayment')}>
-            <View style={[styles.actionIconBox, { backgroundColor: '#FFF3E0' }]}>
-               <Ionicons name="receipt" size={20} color="#FB8C00" />
-            </View>
-            <Text style={styles.actionLabel}>Bills</Text>
-         </TouchableOpacity>
+      {/* Action Grid - Horizontally Scrollable */}
+      <View style={{ marginTop: -30 }}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.actionScrollContent}
+        >
+           <TouchableOpacity style={styles.actionItem} onPress={handleTopUp}>
+              <View style={[styles.actionIconBox, { backgroundColor: '#E3F2FD' }]}>
+                 <Ionicons name="add" size={24} color="#1E88E5" />
+              </View>
+              <Text style={styles.actionLabel}>Top Up</Text>
+           </TouchableOpacity>
+           <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('SendMoney')}>
+              <View style={[styles.actionIconBox, { backgroundColor: '#F3E5F5' }]}>
+                 <Ionicons name="send" size={20} color="#8E24AA" />
+              </View>
+              <Text style={styles.actionLabel}>Send</Text>
+           </TouchableOpacity>
+           <TouchableOpacity style={styles.actionItem} onPress={() => setShowQR(true)}>
+              <View style={[styles.actionIconBox, { backgroundColor: '#E1F5FE' }]}>
+                 <Ionicons name="qr-code-outline" size={20} color="#0288D1" />
+              </View>
+              <Text style={styles.actionLabel}>My QR</Text>
+           </TouchableOpacity>
+           <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('ScanQR')}>
+              <View style={[styles.actionIconBox, { backgroundColor: '#E8F5E9' }]}>
+                 <Ionicons name="scan" size={20} color="#43A047" />
+              </View>
+              <Text style={styles.actionLabel}>Scan</Text>
+           </TouchableOpacity>
+           <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('BillsPayment')}>
+              <View style={[styles.actionIconBox, { backgroundColor: '#FFF3E0' }]}>
+                 <Ionicons name="receipt" size={20} color="#FB8C00" />
+              </View>
+              <Text style={styles.actionLabel}>Bills</Text>
+           </TouchableOpacity>
+        </ScrollView>
       </View>
+
+
+      {/* Receiver QR Modal */}
+      <Modal visible={showQR} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalDismiss} 
+            activeOpacity={1} 
+            onPress={() => setShowQR(false)} 
+          />
+          <View style={styles.qrContent}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.qrTitle}>MY FETCH ID</Text>
+            <Text style={styles.qrSubText}>Let others scan this to send you credits</Text>
+            
+            <View style={styles.qrWrapper}>
+               {/* Simulated QR UI */}
+               <View style={styles.qrInternal}>
+                  <Ionicons name="qr-code" size={200} color={COLORS.onSurface} />
+                  <View style={styles.qrAvatarBox}>
+                    {user?.photoURL ? (
+                      <Image source={{ uri: user.photoURL }} style={styles.qrAvatar} />
+                    ) : (
+                      <Text style={styles.qrAvatarLetter}>{user?.name?.charAt(0).toUpperCase()}</Text>
+                    )}
+                  </View>
+               </View>
+               <Text style={{opacity: 0, height: 0}}>FETCHTRANSFER:{user?.email}</Text>
+            </View>
+
+            <View style={[styles.infoBox, { marginTop: 24, paddingVertical: 12 }]}>
+               <Text style={styles.idLabel}>FETCHMEUP EMAIL</Text>
+               <Text style={styles.idValue}>{user?.email}</Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.closeBtn} 
+              onPress={() => setShowQR(false)}
+            >
+               <Text style={styles.closeBtnText}>DONE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
          <View style={styles.sectionHeader}>
@@ -266,20 +328,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },
-  actionGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+  actionScrollContent: {
     paddingHorizontal: 20,
-    marginTop: -30,
+    gap: 12,
+    paddingBottom: 20, // Space for shadow
   },
   actionItem: {
     alignItems: 'center',
     backgroundColor: COLORS.white,
     padding: 16,
     borderRadius: 20,
-    width: width * 0.2,
+    width: 100, // Fixed width for scroll consistency
     ...SHADOWS.md,
   },
+
   actionIconBox: {
     width: 44,
     height: 44,
@@ -355,4 +417,105 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(0,0,0,0.4)',
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalDismiss: {
+    flex: 1,
+  },
+  qrContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    padding: 32,
+    alignItems: 'center',
+    paddingBottom: 50,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E9ECEF',
+    borderRadius: 2,
+    marginBottom: 24,
+  },
+  qrTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+    color: 'rgba(0,0,0,0.3)',
+    marginBottom: 8,
+  },
+  qrSubText: {
+    fontSize: 14,
+    color: 'rgba(0,0,0,0.5)',
+    fontWeight: '600',
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  qrWrapper: {
+    backgroundColor: '#F8F9FA',
+    padding: 24,
+    borderRadius: 32,
+    borderWidth: 1,
+    borderColor: '#F1F3F5',
+  },
+  qrInternal: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrAvatarBox: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.primary,
+    borderWidth: 4,
+    borderColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 25,
+  },
+  qrAvatarLetter: {
+    color: COLORS.white,
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  idLabel: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: COLORS.primary,
+    letterSpacing: 1.5,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  idValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.onSurface,
+    textAlign: 'center',
+  },
+  closeBtn: {
+    width: '100%',
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: COLORS.onSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 32,
+    ...SHADOWS.md,
+  },
+  closeBtnText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
 });
+

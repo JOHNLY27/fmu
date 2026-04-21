@@ -72,7 +72,19 @@ export default function RiderSettingsScreen({ navigation, route }: any) {
         payout: { method: payoutMethod, account: payoutAccount },
         updatedAt: new Date().toISOString(),
       });
+
+      // Synchronize Primary Auth Identity
+      const { auth } = await import('../config/firebase');
+      const { updateProfile } = await import('firebase/auth');
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, {
+          displayName: name.trim(),
+          photoURL: finalPhotoUrl || undefined
+        });
+      }
+
       Alert.alert('System Synchronized', 'Your operative profile has been updated.');
+
       navigation.goBack();
     } catch (e: any) {
       Alert.alert('Update Failed', e.message);

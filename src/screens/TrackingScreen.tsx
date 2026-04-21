@@ -11,19 +11,34 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
+
+
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
+import { Order, subscribeToOrder, submitRating } from '../services/orderService';
+import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
-import { Order, subscribeToOrder } from '../services/orderService';
+
 
 const { width, height } = Dimensions.get('window');
 
 export default function TrackingScreen({ navigation, route }: any) {
   const { orderId } = route.params || {};
+  const { user } = useAuth();
   const [order, setOrder] = useState<Order | null>(null);
+  
+  // Rating State
+  const [showRating, setShowRating] = useState(false);
+  const [score, setScore] = useState(0);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -33,6 +48,10 @@ export default function TrackingScreen({ navigation, route }: any) {
     if (!orderId) return;
     const unsubscribe = subscribeToOrder(orderId, (data) => {
       setOrder(data);
+      // Auto-trigger rating modal when completed
+      if (data?.status === 'completed' && !data?.isRated) {
+        setShowRating(true);
+      }
     });
 
     Animated.parallel([
@@ -50,6 +69,37 @@ export default function TrackingScreen({ navigation, route }: any) {
 
     return () => unsubscribe();
   }, [orderId]);
+
+  const handleSubmitRating = async () => {
+    if (score === 0) {
+      Alert.alert("Rating Required", "Please select a star rating for your mission agent.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await submitRating(
+        orderId, 
+        user!.uid, 
+        order?.riderId || 'system', 
+        score, 
+        comment, 
+        'rider'
+      );
+      setShowRating(false);
+      Alert.alert("Feedback Received", "Thank you! Your feedback helps keep the FetchMeUp fleet sharp.");
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      });
+    } catch (e) {
+      Alert.alert("Error", "Mission report failed to transmit.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+
 
   const getStatusLabel = () => {
     switch (order?.status) {
@@ -234,8 +284,81 @@ export default function TrackingScreen({ navigation, route }: any) {
             <TouchableOpacity style={styles.supportLink}>
                <Text style={styles.supportText}>Incident Report • Request Support</Text>
             </TouchableOpacity>
-         </View>
-      </Animated.ScrollView>
+          </View>
+       </Animated.ScrollView>
+
+
+       {/* Interactive Rating Modal */}
+       <Modal visible={showRating} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+             <KeyboardAvoidingView 
+               behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+               style={styles.modalContainer}
+             >
+                <View style={styles.ratingPanel}>
+                   <View style={styles.modalHandle} />
+                   <Text style={styles.ratingHeading}>MISSION SUCCESSFUL</Text>
+                   <Text style={styles.ratingSub}>How would you rate your mission agent,</Text>
+                   <Text style={styles.agentName}>{order?.riderName || 'the Fetch Runner'}?</Text>
+
+                   {/* Custom Star Rating */}
+                   <View style={styles.starsRow}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                         <TouchableOpacity 
+                            key={star} 
+                            onPress={() => setScore(star)}
+                            activeOpacity={0.7}
+                            style={styles.starTouch}
+                         >
+                            <Ionicons 
+                               name={star <= score ? "star" : "star-outline"} 
+                               size={44} 
+                               color={star <= score ? "#FFB300" : "#E9ECEF"} 
+                            />
+                         </TouchableOpacity>
+                      ))}
+                   </View>
+
+                   <View style={styles.feedbackBox}>
+                      <Text style={styles.feedbackLabel}>ADDITIONAL INTEL (OPTIONAL)</Text>
+                      <TextInput 
+                         style={styles.feedbackInput}
+                         placeholder="What went well or could be better?"
+                         placeholderTextColor="rgba(0,0,0,0.3)"
+                         multiline
+                         value={comment}
+                         onChangeText={setComment}
+                         maxLength={200}
+                      />
+                   </View>
+
+                   <TouchableOpacity 
+                      style={[styles.submitRatingBtn, score === 0 && styles.disabledBtn]} 
+                      onPress={handleSubmitRating}
+                      disabled={submitting || score === 0}
+                   >
+                      {submitting ? (
+                         <ActivityIndicator color={COLORS.white} />
+                      ) : (
+                         <Text style={styles.submitRatingText}>TRANSMIT FEEDBACK</Text>
+                      )}
+                   </TouchableOpacity>
+
+                   <TouchableOpacity 
+                      style={styles.skipBtn} 
+                      onPress={() => navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'MainTabs' }],
+                      })}
+                      disabled={submitting}
+                   >
+
+                      <Text style={styles.skipText}>SKIP FEEDBACK</Text>
+                   </TouchableOpacity>
+                </View>
+             </KeyboardAvoidingView>
+          </View>
+       </Modal>
     </View>
   );
 }
@@ -550,8 +673,108 @@ const styles = StyleSheet.create({
      alignItems: 'center',
      justifyContent: 'center',
      ...SHADOWS.md,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    width: '100%',
+  },
+  ratingPanel: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+    padding: 32,
+    alignItems: 'center',
+    paddingBottom: 50,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#F1F3F5',
+    borderRadius: 2,
+    marginBottom: 32,
+  },
+  ratingHeading: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+    color: COLORS.tertiary,
+    marginBottom: 12,
+  },
+  ratingSub: {
+    fontSize: 14,
+    color: 'rgba(0,0,0,0.5)',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  agentName: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: COLORS.onSurface,
+    marginBottom: 32,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 40,
+  },
+  starTouch: {
+    padding: 2,
+  },
+  feedbackBox: {
+    width: '100%',
+    marginBottom: 32,
+  },
+  feedbackLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
+    color: 'rgba(0,0,0,0.3)',
+    marginBottom: 12,
+  },
+  feedbackInput: {
+    width: '100%',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    padding: 16,
+    height: 100,
+    textAlignVertical: 'top',
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.onSurface,
+    borderWidth: 1,
+    borderColor: '#F1F3F5',
+  },
+  submitRatingBtn: {
+    width: '100%',
+    height: 60,
+    backgroundColor: COLORS.primary,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.md,
+  },
+  submitRatingText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  skipBtn: {
+    marginTop: 20,
+    padding: 12,
+  },
+  skipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.3)',
+    letterSpacing: 0.5,
   }
 });
+
 
 const darkMapStyle = [
   { "elementType": "geometry", "stylers": [{ "color": "#242f3e" }] },

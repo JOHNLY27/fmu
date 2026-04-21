@@ -23,60 +23,81 @@ import { db } from '../config/firebase';
 const quickReplies = ['Okay, thanks!', 'Be right there', 'Call me when here'];
 
 export default function ChatScreen({ navigation, route }: any) {
-  const { orderId } = route?.params || {};
   const { user } = useAuth();
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [partnerName, setPartnerName] = useState('Connecting...');
 
+  const isSupport = route?.params?.orderId === 'support';
+  const chatRoomId = isSupport 
+    ? (user?.uid ? `support_${user.uid}` : null) 
+    : route?.params?.orderId;
+
+
+
   useEffect(() => {
-    if (!orderId || !user) return;
+    // 1. Immediate Identity Lock (UX First)
+    if (isSupport) {
+      setPartnerName('FetchSupport Agent');
+    }
 
-    // Dynamically fetch who we are talking to
-    const fetchPartnerName = async () => {
-      try {
-        const orderSnap = await getDoc(doc(db, 'orders', orderId));
-        if (orderSnap.exists()) {
-          const orderData = orderSnap.data();
-          // If you are the customer, lookup the rider. If you are the rider, lookup customer.
-          const targetId = user.uid === orderData.userId ? orderData.riderId : orderData.userId;
-          
-          if (targetId) {
-            const userSnap = await getDoc(doc(db, 'users', targetId));
-            if (userSnap.exists()) {
-              setPartnerName(userSnap.data().name || 'FetchMeUp User');
+    if (!chatRoomId) return;
+
+    if (!isSupport && user) {
+      // Dynamically fetch who we are talking to for orders
+      const fetchPartnerName = async () => {
+        try {
+          const oId = route?.params?.orderId;
+          const orderSnap = await getDoc(doc(db, 'orders', oId));
+          if (orderSnap.exists()) {
+            const orderData = orderSnap.data();
+            const targetId = user.uid === orderData.userId ? orderData.riderId : orderData.userId;
+            
+            if (targetId) {
+              const userSnap = await getDoc(doc(db, 'users', targetId));
+              if (userSnap.exists()) {
+                setPartnerName(userSnap.data().name || 'FetchMeUp User');
+              } else {
+                setPartnerName(user.uid === orderData.userId ? 'Rider' : 'Customer');
+              }
             } else {
-              setPartnerName(user.uid === orderData.userId ? 'Rider' : 'Customer');
+              setPartnerName('Finding Rider...');
             }
-          } else {
-            setPartnerName('Finding Rider...');
           }
+        } catch (e) {
+          console.log('Error fetching partner:', e);
+          setPartnerName('Messenger');
         }
-      } catch (e) {
-        console.log('Error fetching partner:', e);
-      }
-    };
-    fetchPartnerName();
+      };
+      fetchPartnerName();
+    }
 
-    const unsubscribe = subscribeToMessages(orderId, (newMessages) => {
-      setMessages(newMessages);
-    });
-    return () => unsubscribe();
-  }, [orderId, user]);
+    // 2. Mission Control Connection
+    if (user && chatRoomId) {
+      const unsubscribe = subscribeToMessages(chatRoomId, (newMessages) => {
+        setMessages(newMessages);
+      });
+      return () => unsubscribe();
+    }
+  }, [chatRoomId, user?.uid, isSupport]);
+
+
+
 
   const handleSend = async (text: string, imageUrl?: string) => {
     if ((!text.trim() && !imageUrl) || !user) return;
-    if (!orderId) {
-      Alert.alert('Missing Order ID', 'You need to book a ride or have an active delivery to chat!');
+    if (!chatRoomId) {
+      Alert.alert('Missing Room ID', 'Could not establish connection.');
       return;
     }
     try {
-      await sendMessage(orderId, user.uid, text.trim(), imageUrl);
+      await sendMessage(chatRoomId, user.uid, text.trim(), imageUrl);
       setMessage('');
     } catch (e) {
       console.log(e);
     }
   };
+
 
   const handleSendPhoto = () => {
     // Simulate taking/picking a photo and sending it
@@ -140,8 +161,9 @@ export default function ChatScreen({ navigation, route }: any) {
       >
         {/* Day Label */}
         <View style={styles.dayLabel}>
-          <Text style={styles.dayLabelText}>LIVE CHAT</Text>
+          <Text style={styles.dayLabelText}>{isSupport ? 'ADMIN DISPATCH' : 'LIVE CHAT'}</Text>
         </View>
+
 
         {messages.length === 0 && (
           <Text style={{ textAlign: 'center', color: COLORS.onSurfaceVariant, fontSize: 13, marginTop: 20 }}>

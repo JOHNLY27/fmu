@@ -62,11 +62,11 @@ export default function ProfileEditScreen({ navigation }: any) {
     try {
       let finalPhotoUrl = image;
       
-      // If a new local image was picked, upload it
       if (image && !image.startsWith('http')) {
         finalPhotoUrl = await uploadImage(image, `users/avatars/${user?.uid}_${Date.now()}`);
       }
 
+      // 1. Update Database Identity
       const userRef = doc(db, 'users', user?.uid || '');
       await updateDoc(userRef, {
         name: name.trim(),
@@ -75,7 +75,19 @@ export default function ProfileEditScreen({ navigation }: any) {
         'location.barangay': barangay,
         updatedAt: new Date().toISOString()
       });
+
+      // 2. Update Auth Identity for persistent syncing
+      const { auth } = await import('../config/firebase');
+      const { updateProfile } = await import('firebase/auth');
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, {
+          displayName: name.trim(),
+          photoURL: finalPhotoUrl || undefined
+        });
+      }
+
       Alert.alert('Success', 'Your identity profile has been updated.');
+
       navigation.goBack();
     } catch (e: any) {
       Alert.alert('Update Failed', e.message);

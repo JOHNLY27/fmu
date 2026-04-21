@@ -24,15 +24,22 @@ export interface Order {
   type: 'ride' | 'food' | 'parcel' | 'pabili';
   status: OrderStatus;
   pickupLocation: string;
+  pickupCoords?: { latitude: number, longitude: number };
   dropoffLocation: string;
+  dropoffCoords?: { latitude: number, longitude: number };
   price: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   itemDetails?: string;
   customerCity?: string;
   customerProvince?: string;
+  isRated?: boolean;
+  riderName?: string;
+  riderLocation?: { latitude: number, longitude: number };
   createdAt?: any;
 }
+
+
 
 // 1. User Creates an Order (Ride or Food)
 export const createOrder = async (orderData: Omit<Order, 'id' | 'status' | 'riderId' | 'createdAt'>) => {
@@ -100,6 +107,8 @@ export const acceptOrder = async (orderId: string, riderId: string) => {
   }
 };
 
+import { referralService } from './referralService';
+
 // 4. Update order status (picked_up, completed, etc.)
 export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
   try {
@@ -107,11 +116,22 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus)
     await updateDoc(orderRef, {
       status: newStatus
     });
+
+    if (newStatus === 'completed') {
+      // Trigger referral reward check
+      const orderSnap = await getDoc(orderRef);
+      if (orderSnap.exists()) {
+        const { userId } = orderSnap.data();
+        // Run reward logic in background
+        referralService.processReferralReward(userId);
+      }
+    }
   } catch (error) {
     console.error("Error updating order status:", error);
     throw error;
   }
 };
+
 
 // 5. User App listens to their specific order to see when a rider accepts it
 export const subscribeToOrder = (orderId: string, callback: (order: Order | null) => void) => {
@@ -194,4 +214,37 @@ export const subscribeToRiderJobs = (
     
     callback(orders);
   });
+};
+// 9. Submit a rating for a completed order
+export const submitRating = async (
+  orderId: string, 
+  userId: string, 
+  targetId: string, 
+  rating: number, 
+  comment: string,
+  type: 'rider' | 'merchant'
+) => {
+  try {
+    const ratingsRef = collection(db, 'ratings');
+    await addDoc(ratingsRef, {
+      orderId,
+      userId,
+      targetId, // Rider or Merchant ID
+      rating,
+      comment,
+      type,
+      createdAt: serverTimestamp(),
+    });
+
+    // Mark the order as rated so we don't ask again
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, {
+      isRated: true
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error submitting rating:", error);
+    throw error;
+  }
 };

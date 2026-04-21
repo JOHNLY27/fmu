@@ -11,7 +11,9 @@ import {
   Dimensions,
   Platform,
   Alert,
+  Modal,
 } from 'react-native';
+
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
@@ -28,6 +30,8 @@ export default function RiderDashboardScreen({ navigation }: any) {
   const [activeJob, setActiveJob] = useState<Order | null>(null);
   const [myCompletedJobs, setMyCompletedJobs] = useState<Order[]>([]);
   const [isOnline, setIsOnline] = useState(true);
+  const [showQR, setShowQR] = useState(false);
+
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -210,12 +214,22 @@ export default function RiderDashboardScreen({ navigation }: any) {
                         style={styles.activeMainBtn}
                         onPress={() => handleUpdateStatus(activeJob.status === 'accepted' ? 'picked_up' : 'completed')}
                      >
-                        <Text style={styles.activeMainBtnText}>
+                        <Text 
+                          style={styles.activeMainBtnText}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                        >
                            {activeJob.status === 'accepted' ? 'CONFIRM PICKUP' : 'COMPLETE DELIVERY'}
                         </Text>
-                        <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
                      </TouchableOpacity>
                      
+                     <TouchableOpacity 
+                        style={styles.qrBtn}
+                        onPress={() => setShowQR(true)}
+                     >
+                        <Ionicons name="qr-code" size={20} color={COLORS.white} />
+                     </TouchableOpacity>
+
                      <TouchableOpacity 
                         style={styles.activeSideBtn}
                         onPress={() => navigation.navigate('TrackingDetail', { orderId: activeJob.id })}
@@ -226,6 +240,45 @@ export default function RiderDashboardScreen({ navigation }: any) {
                </LinearGradient>
             </View>
           )}
+
+          {/* Payment QR Modal */}
+          <Modal visible={showQR} transparent animationType="fade">
+            <View style={styles.qrOverlay}>
+               <View style={styles.qrPanel}>
+                 <Text style={styles.qrTitle}>MISSION PAYMENT QR</Text>
+                 <Text style={styles.qrSub}>Scan this to pay ₱{activeJob?.price?.toFixed(2)}</Text>
+                 
+                 <View style={styles.qrBox}>
+                   {/* Simulated Premium QR */}
+                   <View style={styles.qrInner}>
+                     <Ionicons name="qr-code" size={180} color="#0f1419" />
+                     <View style={styles.qrCenterLogo}>
+                       <Text style={styles.qrFetchText}>F</Text>
+                     </View>
+                   </View>
+                   {/* Hidden machine readable text for scanning simulation */}
+                   <Text style={{opacity: 0, height: 0}}>
+                     {`FETCHPAY:${activeJob?.id}:${activeJob?.price}:${user?.uid}:${user?.name}`}
+                   </Text>
+                 </View>
+
+                 <View style={styles.qrDetails}>
+                   <View style={styles.qrDetailItem}>
+                     <Text style={styles.qrLabel}>ORDER ID</Text>
+                     <Text style={styles.qrValue}>#{activeJob?.id?.substring(0,8).toUpperCase()}</Text>
+                   </View>
+                   <View style={[styles.qrDetailItem, { alignItems: 'flex-end' }]}>
+                     <Text style={styles.qrLabel}>RIDER</Text>
+                     <Text style={styles.qrValue}>{user?.name}</Text>
+                   </View>
+                 </View>
+
+                 <TouchableOpacity style={styles.qrCloseBtn} onPress={() => setShowQR(false)}>
+                    <Text style={styles.qrCloseText}>CLOSE QR CODE</Text>
+                 </TouchableOpacity>
+               </View>
+            </View>
+          </Modal>
 
           {/* Quick Stats Widgets */}
           <View style={styles.statsContainer}>
@@ -801,32 +854,140 @@ const styles = StyleSheet.create({
   },
   activeActions: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    gap: 8,
   },
+
   activeMainBtn: {
-    flex: 1,
-    height: 54,
+    flex: 3,
+
     backgroundColor: COLORS.white,
-    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    height: 56,
+    borderRadius: 18,
+    ...SHADOWS.sm,
   },
   activeMainBtnText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '900',
     color: COLORS.primary,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+  },
+  qrBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   activeSideBtn: {
-    width: 54,
-    height: 54,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 56,
+    height: 56,
     borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  qrPanel: {
+    width: '100%',
+    backgroundColor: COLORS.white,
+    borderRadius: 36,
+    padding: 32,
+    alignItems: 'center',
+  },
+  qrTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+    color: 'rgba(0,0,0,0.3)',
+    marginBottom: 8,
+  },
+  qrSub: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: COLORS.onSurface,
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  qrBox: {
+    width: 240,
+    height: 240,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: '#F1F3F5',
+    marginBottom: 32,
+  },
+  qrInner: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrCenterLogo: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: COLORS.white,
+  },
+  qrFetchText: {
+    color: COLORS.white,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  qrDetails: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 32,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F3F5',
+    marginBottom: 32,
+  },
+  qrDetailItem: {
+    gap: 4,
+  },
+  qrLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: 'rgba(0,0,0,0.3)',
+    letterSpacing: 1,
+  },
+  qrValue: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: COLORS.onSurface,
+  },
+  qrCloseBtn: {
+    width: '100%',
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: '#f1f3f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrCloseText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: 'rgba(0,0,0,0.5)',
+    letterSpacing: 1,
   },
 });
+

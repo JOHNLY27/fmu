@@ -12,7 +12,10 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { deductFromWallet } from '../services/walletService';
+import { payRiderForMission } from '../services/walletService';
+import SecurityVerificationModal from '../components/SecurityVerificationModal';
+
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,6 +23,9 @@ export default function ScanQRScreen({ navigation }: any) {
   const { user } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [paymentData, setPaymentData] = useState<any>(null);
+
 
   useEffect(() => {
     if (!permission) {
@@ -27,45 +33,64 @@ export default function ScanQRScreen({ navigation }: any) {
     }
   }, []);
 
-  // SIMULATION: after 3 seconds of being open, trigger a "Scan Success"
-  useEffect(() => {
-    if (permission?.granted && !scanned) {
-      const timer = setTimeout(() => {
-        handleSimulatedScan();
-      }, 3000);
-      return () => clearTimeout(timer);
+  const handleBarcodeScanned = async ({ data }: any) => {
+    if (scanned) return;
+    
+    // Check for P2P Transfer format: FETCHTRANSFER:EMAIL
+    if (data.startsWith('FETCHTRANSFER:')) {
+      setScanned(true);
+      const [_, recipientEmail] = data.split(':');
+      
+      navigation.replace('SendMoney', { prefilledEmail: recipientEmail });
+      return;
     }
-  }, [permission, scanned]);
 
-  const handleSimulatedScan = () => {
-    setScanned(true);
-    Alert.alert(
-      "Merchant Detected",
-      "Pay ₱150.00 to 'Butuan Food Corner' via FetchPay?",
-      [
-        { text: "Cancel", style: "cancel", onPress: () => navigation.goBack() },
-        { 
-          text: "Pay Now", 
-          onPress: async () => {
-             try {
-                await deductFromWallet(user!.uid, 150, "QR Payment: Butuan Food Corner");
-                navigation.navigate('Receipt', {
-                  data: {
-                    amount: 150,
-                    target: 'Butuan Food Corner',
-                    type: 'Merchant Scan',
-                    id: `QR-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
-                  }
-                });
-             } catch (e: any) {
-                Alert.alert("Error", e.message);
-                navigation.goBack();
-             }
-          }
-        }
-      ]
-    );
+    // Check for FetchPay format: FETCHPAY:ORDER_ID:AMOUNT:RIDER_ID:RIDER_NAME
+    if (data.startsWith('FETCHPAY:')) {
+      setScanned(true);
+      const [_, orderId, amount, riderId, riderName] = data.split(':');
+      const numAmount = parseFloat(amount);
+
+      setPaymentData({ orderId, numAmount, riderId, riderName });
+
+      if (user?.transactionPin) {
+        setShowSecurityModal(true);
+      } else {
+        Alert.alert(
+          "Mission Payment",
+          `Pay ₱${numAmount.toFixed(2)} to ${riderName}?`,
+          [
+            { text: "Cancel", style: "cancel", onPress: () => setScanned(false) },
+            { text: "Pay Now", onPress: performPayment }
+          ]
+        );
+      }
+    }
   };
+
+  const performPayment = async () => {
+    if (!paymentData) return;
+    const { orderId, numAmount, riderId, riderName } = paymentData;
+    
+    try {
+      await payRiderForMission(orderId, user!.uid, riderId, numAmount);
+      setShowSecurityModal(false);
+      navigation.replace('Receipt', {
+        data: {
+          amount: numAmount,
+          target: riderName,
+          type: 'Courier Payment',
+          id: `QR-${orderId.substring(0,6).toUpperCase()}`
+        }
+      });
+    } catch (e: any) {
+      Alert.alert("Transaction Failed", e.message);
+      setScanned(false);
+      setShowSecurityModal(false);
+    }
+  };
+
+
 
   if (!permission) return <View style={styles.container}><Text>Requesting for camera permission</Text></View>;
   if (!permission.granted) return <View style={styles.container}><Text>No access to camera</Text></View>;
@@ -73,7 +98,11 @@ export default function ScanQRScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <CameraView style={StyleSheet.absoluteFillObject} />
+      <CameraView 
+        style={StyleSheet.absoluteFillObject} 
+        onBarcodeScanned={handleBarcodeScanned}
+      />
+
       
       {/* Overlay */}
       <View style={styles.overlay}>
@@ -103,9 +132,20 @@ export default function ScanQRScreen({ navigation }: any) {
             </TouchableOpacity>
          </View>
       </View>
+      <SecurityVerificationModal 
+          visible={showSecurityModal}
+          onSuccess={performPayment}
+          onCancel={() => {
+            setShowSecurityModal(false);
+            setScanned(false);
+          }}
+          title="CONFIRM SHIPMENT"
+          subtitle={paymentData ? `Authorize ₱${paymentData.numAmount} for #${paymentData.orderId.substring(0,6).toUpperCase()}` : ''}
+       />
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

@@ -21,9 +21,9 @@ import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { Store } from '../types';
 import { createOrder, PaymentMethod } from '../services/orderService';
 import { useAuth } from '../context/AuthContext';
-import BarangaySelector from '../components/ui/BarangaySelector';
 import Button from '../components/ui/Button';
 import PaymentMethodSelector from '../components/ui/PaymentMethodSelector';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -48,12 +48,19 @@ export default function PabiliOrderScreen({ navigation, route }: any) {
   
   const [items, setItems] = useState<PabiliItemInput[]>([createEmptyItem()]);
   const [quickCommand, setQuickCommand] = useState('');
-  const [dropoff, setDropoff] = useState('');
+  const [dropoffData, setDropoffData] = useState<any>(null);
+
   const [tip, setTip] = useState(20);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cash');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [requestMode, setRequestMode] = useState<'list' | 'note'>(isGeneral ? 'note' : 'list');
+
+  // Voucher Engine State
+  const [voucherCode, setVoucherCode] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [isValidating, setIsValidating] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -72,7 +79,43 @@ export default function PabiliOrderScreen({ navigation, route }: any) {
     setItems(prev => prev.map(i => (i.id === id ? { ...i, [field]: value } : i)));
   };
 
+  const handleApplyVoucher = async () => {
+    if (!voucherCode.trim()) return;
+    setIsValidating(true);
+    try {
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const q = query(collection(db, 'vouchers'), where('code', '==', voucherCode.toUpperCase()), where('isActive', '==', true));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        Alert.alert('Invalid Code', 'This protocol does not exist or has expired.');
+        setAppliedVoucher(null);
+        setDiscountAmount(0);
+        return;
+      }
+
+      const v = snap.docs[0].data();
+      let disc = 0;
+      const baseFee = 49;
+      if (v.type === 'fixed') {
+        disc = v.value;
+      } else {
+        disc = baseFee * (v.value / 100);
+      }
+
+      setAppliedVoucher(v);
+      setDiscountAmount(disc);
+      Alert.alert('Voucher Applied', `Service discount of ₱${disc.toFixed(2)} synchronized.`);
+      
+    } catch (e) {
+      Alert.alert('System Error', 'Could not validate pabili promo.');
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   const handleSubmit = async () => {
+
     const validItems = items.filter(i => i.name.trim());
     if (requestMode === 'note' && !quickCommand.trim()) {
       Alert.alert('Empty Mission', 'Please specify what you want us to buy in the note.');
@@ -82,10 +125,11 @@ export default function PabiliOrderScreen({ navigation, route }: any) {
       Alert.alert('Empty List', 'Add at least one item to your shopping list.');
       return;
     }
-    if (!dropoff) {
+    if (!dropoffData) {
       Alert.alert('No Destination', 'Choose where we should deliver your items.');
       return;
     }
+
     
     setIsSubmitting(true);
     try {
@@ -95,14 +139,16 @@ export default function PabiliOrderScreen({ navigation, route }: any) {
         type: 'pabili',
         status: 'pending',
         pickupLocation: isGeneral ? (quickCommand.split('from')[1]?.trim() || 'Anywhere') : store.name,
-        dropoffLocation: `${dropoff}, Butuan`,
-        price: 49 + tip, 
+        dropoffLocation: dropoffData.address,
+        dropoffCoords: { latitude: dropoffData.latitude, longitude: dropoffData.longitude },
+        price: Math.max(0, (49 + tip) - discountAmount), 
         paymentMethod: selectedPayment,
         paymentStatus: selectedPayment === 'cash' ? 'pending' : 'paid',
         itemDetails: requestMode === 'note' ? quickCommand : `List: ${summary}`,
         customerCity: user?.location?.city || 'Butuan',
         customerProvince: user?.location?.province || 'Agusan del Norte',
       });
+
       navigation.navigate('TrackingDetail', { orderId });
     } catch (e: any) {
       Alert.alert('Error', e.message);
@@ -152,16 +198,23 @@ export default function PabiliOrderScreen({ navigation, route }: any) {
                   <View style={styles.destIconBox}>
                      <Ionicons name="location" size={22} color={COLORS.primary} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                     <BarangaySelector 
-                        value={dropoff} 
-                        onSelect={setDropoff} 
-                        label="SELECT DROP-OFF BARANGAY"
-                        placeholder="Choose your location in Butuan..."
-                     />
-                     <Text style={styles.destGuide}>We'll deliver right to your door in this barangay.</Text>
-                  </View>
+                  <TouchableOpacity 
+                    style={{ flex: 1 }}
+                    onPress={() => navigation.navigate('LocationPicker', {
+                      title: 'Delivery Point',
+                      onLocationSelect: (data: any) => setDropoffData(data)
+                    })}
+                  >
+                     <Text style={{ fontSize: 10, fontWeight: '900', letterSpacing: 1, color: 'rgba(0,0,0,0.3)', marginBottom: 4 }}>
+                       SET DELIVERY POINT
+                     </Text>
+                     <Text style={{ fontSize: 16, fontWeight: '800', color: dropoffData ? COLORS.onSurface : 'rgba(0,0,0,0.2)' }} numberOfLines={1}>
+                       {dropoffData ? dropoffData.address : 'Tap to pin your exact house...'}
+                     </Text>
+                     <Text style={styles.destGuide}>We'll deliver right to your door with multi-point accuracy.</Text>
+                  </TouchableOpacity>
                </View>
+
 
                {/* STEP 2: WHAT TO BUY */}
                <View style={[styles.cardHeader, { marginTop: 32 }]}>
@@ -302,9 +355,44 @@ export default function PabiliOrderScreen({ navigation, route }: any) {
                         <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.2)" />
                      </TouchableOpacity>
 
+                     {/* Voucher HUD */}
+                     <View style={styles.voucherHUD}>
+                        <View style={styles.pabiliVoucherRow}>
+                           <TextInput 
+                              style={styles.pabiliVoucherInput}
+                              placeholder="PROMO CODE"
+                              value={voucherCode}
+                              onChangeText={setVoucherCode}
+                              autoCapitalize="characters"
+                           />
+                           <TouchableOpacity 
+                              style={[styles.pabiliApplyBtn, !voucherCode && { opacity: 0.5 }]}
+                              onPress={handleApplyVoucher}
+                              disabled={isValidating || !voucherCode}
+                           >
+                              <Text style={styles.pabiliApplyText}>{isValidating ? '...' : 'APPLY'}</Text>
+                           </TouchableOpacity>
+                        </View>
+                        {appliedVoucher && (
+                           <View style={styles.pabiliAppliedBadge}>
+                              <Ionicons name="checkmark-seal" size={12} color="#10b981" />
+                              <Text style={styles.pabiliAppliedText}>{appliedVoucher.code} (-₱{discountAmount.toFixed(2)})</Text>
+                              <TouchableOpacity onPress={() => { setAppliedVoucher(null); setDiscountAmount(0); setVoucherCode(''); }}>
+                                 <Ionicons name="close-circle" size={14} color="rgba(0,0,0,0.2)" />
+                              </TouchableOpacity>
+                           </View>
+                        )}
+                     </View>
+
                      <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>TOTAL SERVICE</Text>
-                        <Text style={styles.totalBig}>₱{(49 + tip).toFixed(2)}</Text>
+                        <View style={{ flex: 1 }}>
+                           <Text style={styles.totalLabel}>TOTAL SERVICE</Text>
+                           {discountAmount > 0 && <Text style={{ fontSize: 10, color: '#10b981', fontWeight: '800' }}>Promo applied</Text>}
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                           {discountAmount > 0 && <Text style={{ fontSize: 12, color: '#10b981', fontWeight: '900', marginBottom: 2 }}>-₱{discountAmount.toFixed(2)}</Text>}
+                           <Text style={styles.totalBig}>₱{Math.max(0, (49 + tip) - discountAmount).toFixed(2)}</Text>
+                        </View>
                      </View>
                   </View>
 
@@ -754,5 +842,53 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 20,
+  },
+  voucherHUD: {
+    marginTop: 12,
+  },
+  pabiliVoucherRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 14,
+    height: 48,
+    paddingLeft: 12,
+    paddingRight: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F1F3F5',
+  },
+  pabiliVoucherInput: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.onSurface,
+  },
+  pabiliApplyBtn: {
+    backgroundColor: COLORS.onSurface,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pabiliApplyText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  pabiliAppliedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  pabiliAppliedText: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#10b981',
   },
 });

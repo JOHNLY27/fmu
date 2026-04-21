@@ -85,6 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(credential.user, { displayName: name });
 
+    // build a distinct referral code (Alpha-Numeric)
+    const shortCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const cleanName = name.split(' ')[0].replace(/[^a-zA-Z]/g, '').toUpperCase();
+    const referralCode = `${cleanName}${shortCode}`;
+
     // Build user data - only include fields that have actual values
     const finalData: Record<string, any> = {
       uid: credential.user.uid,
@@ -93,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: role,
       status: role === 'rider' ? 'pending' : 'approved',
       createdAt: new Date().toISOString(),
+      referralCode: referralCode,
     };
 
     // Only add location if it was provided
@@ -110,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     await setDoc(doc(db, 'users', safeData.uid), safeData);
     setUser(safeData);
+
   };
 
   const signOut = async () => {

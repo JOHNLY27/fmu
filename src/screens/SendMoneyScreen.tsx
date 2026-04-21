@@ -16,14 +16,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { sendMoneyToUser } from '../services/walletService';
+import SecurityVerificationModal from '../components/SecurityVerificationModal';
 
-export default function SendMoneyScreen({ navigation }: any) {
+
+export default function SendMoneyScreen({ navigation, route }: any) {
+  const { prefilledEmail } = route.params || {};
   const { user } = useAuth();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(prefilledEmail || '');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
 
-  const handleSend = async () => {
+
+  React.useEffect(() => {
+    if (prefilledEmail) {
+      setEmail(prefilledEmail);
+    }
+  }, [prefilledEmail]);
+
+
+  const handleSend = () => {
     if (!email || !amount) {
       Alert.alert('Incomplete', 'Please provide recipient email and amount.');
       return;
@@ -35,6 +47,25 @@ export default function SendMoneyScreen({ navigation }: any) {
       return;
     }
 
+    // Require PIN/Biometrics if set
+    if (user?.transactionPin) {
+      setShowSecurityModal(true);
+    } else {
+      // For first time users without a PIN, prompt to set one or proceed
+      Alert.alert(
+        "Security Alert", 
+        "You haven't set a Transaction PIN yet. For your safety, we recommend setting one in Security Settings.",
+        [
+          { text: "Set PIN Now", onPress: () => navigation.navigate('PrivacySecurity') },
+          { text: "Skip & Pay", onPress: () => performTransfer() }
+        ]
+      );
+    }
+  };
+
+  const performTransfer = async () => {
+    setShowSecurityModal(false);
+    const value = parseFloat(amount);
     setLoading(true);
     try {
       await sendMoneyToUser(user!.uid, email, value);
@@ -52,6 +83,7 @@ export default function SendMoneyScreen({ navigation }: any) {
       setLoading(false);
     }
   };
+
 
   return (
     <KeyboardAvoidingView 
@@ -82,6 +114,12 @@ export default function SendMoneyScreen({ navigation }: any) {
                 keyboardType="email-address"
                 autoCapitalize="none"
              />
+             <TouchableOpacity 
+                style={styles.scanMiniBtn}
+                onPress={() => navigation.navigate('ScanQR')}
+              >
+                <Ionicons name="qr-code-outline" size={20} color={COLORS.primary} />
+              </TouchableOpacity>
           </View>
         </View>
 
@@ -121,7 +159,16 @@ export default function SendMoneyScreen({ navigation }: any) {
            </Text>
         </View>
       </View>
+
+      <SecurityVerificationModal 
+        visible={showSecurityModal}
+        onSuccess={performTransfer}
+        onCancel={() => setShowSecurityModal(false)}
+        title="AUTHORIZE TRANSFER"
+        subtitle={`Confirm ₱${amount} transfer to ${email}`}
+      />
     </KeyboardAvoidingView>
+
   );
 }
 
@@ -223,4 +270,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 18,
   },
+  scanMiniBtn: {
+    padding: 10,
+    backgroundColor: `${COLORS.primary}15`,
+    borderRadius: 12,
+  },
 });
+

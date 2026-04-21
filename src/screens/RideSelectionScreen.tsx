@@ -33,12 +33,19 @@ const rideTiers = [
 export default function RideSelectionScreen({ navigation }: any) {
   const { user } = useAuth();
   const [activeTier, setActiveTier] = useState(rideTiers[1]);
-  const [pickup, setPickup] = useState('');
-  const [dropoff, setDropoff] = useState('');
+  const [pickupData, setPickupData] = useState<any>(null);
+  const [dropoffData, setDropoffData] = useState<any>(null);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
-  const [isBooking, setIsBooking] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cash');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+  // Voucher Engine State
+  const [voucherCode, setVoucherCode] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [isValidating, setIsValidating] = useState(false);
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -50,33 +57,84 @@ export default function RideSelectionScreen({ navigation }: any) {
     ]).start();
   }, []);
 
-  const getDistance = (locA: string, locB: string) => {
+  const getDistance = (locA: any, locB: any) => {
     if (!locA || !locB) return null;
-    if (locA === locB) return 1.5;
-    const seed = locA.length + locB.length;
-    return 2.5 + (seed % 10);
+    
+    // Haversine formula for real distance calculation
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const R = 6371; // km
+    const dLat = toRad(locB.latitude - locA.latitude);
+    const dLon = toRad(locB.longitude - locA.longitude);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(locA.latitude)) * Math.cos(toRad(locB.latitude)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const d = R * c;
+    
+    // Minimum 1.5km for short rides
+    return Math.max(1.5, parseFloat(d.toFixed(2)));
   };
 
   useEffect(() => {
-    const km = getDistance(pickup, dropoff);
+    const km = getDistance(pickupData, dropoffData);
     setDistanceKm(km);
-  }, [pickup, dropoff]);
+  }, [pickupData, dropoffData]);
+
 
   const calculatePrice = (tier: typeof rideTiers[0]) => {
-    if (!distanceKm) return tier.base;
-    return Math.round(tier.base + (distanceKm * tier.kmRate));
+    if (!distanceKm) return Math.max(0, tier.base - discountAmount);
+    const raw = tier.base + (distanceKm * tier.kmRate);
+    return Math.max(0, Math.round(raw - discountAmount));
+  };
+
+  const handleApplyVoucher = async () => {
+    if (!voucherCode.trim()) return;
+    setIsValidating(true);
+    try {
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../config/firebase');
+      const q = query(collection(db, 'vouchers'), where('code', '==', voucherCode.toUpperCase()), where('isActive', '==', true));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        Alert.alert('Protocol Error', 'This promo code is invalid or has reached its lifecycle end.');
+        setAppliedVoucher(null);
+        setDiscountAmount(0);
+        return;
+      }
+
+      const v = snap.docs[0].data();
+      let disc = 0;
+      const baseFare = activeTier.base;
+      if (v.type === 'fixed') {
+        disc = v.value;
+      } else {
+        disc = baseFare * (v.value / 100);
+      }
+
+      setAppliedVoucher(v);
+      setDiscountAmount(disc);
+      setShowVoucherModal(false);
+      Alert.alert('Voucher Activated', `Trajectory discount of ₱${disc.toFixed(2)} synchronized.`);
+      
+    } catch (e) {
+      Alert.alert('System Error', 'Could not sync with promotional hub.');
+    } finally {
+      setIsValidating(false);
+    }
   };
 
   const handleBooking = async () => {
-    if (!user || !pickup || !dropoff) return;
-    setIsBooking(true);
     try {
       const orderId = await createOrder({
         userId: user.uid,
         type: 'ride',
         status: 'pending',
-        pickupLocation: `${pickup}, Butuan`,
-        dropoffLocation: `${dropoff}, Butuan`,
+        pickupLocation: pickupData.address,
+        pickupCoords: { latitude: pickupData.latitude, longitude: pickupData.longitude },
+        dropoffLocation: dropoffData.address,
+        dropoffCoords: { latitude: dropoffData.latitude, longitude: dropoffData.longitude },
         price: calculatePrice(activeTier),
         paymentMethod: selectedPayment,
         paymentStatus: selectedPayment === 'cash' ? 'pending' : 'paid',
@@ -84,6 +142,7 @@ export default function RideSelectionScreen({ navigation }: any) {
         customerCity: user.location?.city || 'Butuan',
         customerProvince: user.location?.province || 'Agusan del Norte',
       });
+
       navigation.navigate('TrackingDetail', { orderId });
     } catch (e) {
       console.log(e);
@@ -131,21 +190,34 @@ export default function RideSelectionScreen({ navigation }: any) {
                <Ionicons name="location" size={16} color={COLORS.primary} />
             </View>
             <View style={styles.routeInputs}>
-               <BarangaySelector 
-                  value={pickup} 
-                  onSelect={setPickup} 
-                  placeholder="Set Pickup Point"
-                  variant="minimal"
-               />
+               <TouchableOpacity 
+                 style={styles.locationInput}
+                 onPress={() => navigation.navigate('LocationPicker', {
+                   title: 'Set Pickup Point',
+                   onLocationSelect: (data: any) => setPickupData(data)
+                 })}
+               >
+                 <Text style={[styles.locationText, !pickupData && styles.placeholderText]} numberOfLines={1}>
+                   {pickupData ? pickupData.address : 'Set Pickup Point'}
+                 </Text>
+               </TouchableOpacity>
+
                <View style={styles.inputDivider} />
-               <BarangaySelector 
-                  value={dropoff} 
-                  onSelect={setDropoff} 
-                  placeholder="Set Destination"
-                  variant="minimal"
-               />
+
+               <TouchableOpacity 
+                 style={styles.locationInput}
+                 onPress={() => navigation.navigate('LocationPicker', {
+                   title: 'Set Destination',
+                   onLocationSelect: (data: any) => setDropoffData(data)
+                 })}
+               >
+                 <Text style={[styles.locationText, !dropoffData && styles.placeholderText]} numberOfLines={1}>
+                   {dropoffData ? dropoffData.address : 'Set Destination'}
+                 </Text>
+               </TouchableOpacity>
             </View>
          </View>
+
       </View>
 
       {/* Ride Selector Panel */}
@@ -214,11 +286,62 @@ export default function RideSelectionScreen({ navigation }: any) {
                <Ionicons name="chevron-forward" size={14} color="rgba(0,0,0,0.2)" />
             </TouchableOpacity>
             <View style={styles.vDivider} />
-            <View style={styles.specItem}>
-               <Ionicons name="flash-outline" size={16} color={COLORS.primary} />
-               <Text style={styles.specText}>Zero Surge</Text>
-            </View>
+            <TouchableOpacity 
+              style={styles.specItem}
+              onPress={() => setShowVoucherModal(true)}
+            >
+               <Ionicons name="gift-outline" size={16} color={appliedVoucher ? '#10b981' : COLORS.primary} />
+               <Text style={[styles.specText, appliedVoucher && { color: '#10b981' }]}>
+                 {appliedVoucher ? `DISCOUNT (-₱${discountAmount.toFixed(0)})` : 'Vouchers'}
+               </Text>
+            </TouchableOpacity>
          </View>
+
+         {/* Voucher Input Modal */}
+         <Modal
+            visible={showVoucherModal}
+            animationType="fade"
+            transparent={true}
+            onRequestClose={() => setShowVoucherModal(false)}
+         >
+            <View style={styles.modalOverlay}>
+               <TouchableOpacity 
+                  style={styles.modalDismiss} 
+                  activeOpacity={1} 
+                  onPress={() => setShowVoucherModal(false)} 
+               />
+               <View style={[styles.modalContent, { padding: 24, paddingBottom: 40 }]}>
+                  <View style={styles.modalHandle} />
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f1419', marginBottom: 8 }}>Apply Promo Code</Text>
+                  <Text style={{ fontSize: 13, color: 'rgba(0,0,0,0.4)', marginBottom: 20 }}>Unlock lower trajectory fares with valid mission protocols.</Text>
+                  
+                  <View style={styles.rideVoucherRow}>
+                     <TextInput 
+                        style={styles.rideVoucherInput}
+                        placeholder="ENTER VOUCHER CODE"
+                        value={voucherCode}
+                        onChangeText={setVoucherCode}
+                        autoCapitalize="characters"
+                     />
+                     <TouchableOpacity 
+                        style={styles.rideApplyBtn}
+                        onPress={handleApplyVoucher}
+                        disabled={isValidating || !voucherCode}
+                     >
+                        <Text style={styles.rideApplyBtnText}>{isValidating ? '...' : 'APPLY'}</Text>
+                     </TouchableOpacity>
+                  </View>
+                  {appliedVoucher && (
+                    <TouchableOpacity 
+                      style={{ marginTop: 12, alignItems: 'center' }}
+                      onPress={() => { setAppliedVoucher(null); setDiscountAmount(0); setVoucherCode(''); }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#ef4444' }}>REMOVE ACTIVE VOUCHER</Text>
+                    </TouchableOpacity>
+                  )}
+               </View>
+            </View>
+         </Modal>
 
          <Modal
             visible={showPaymentModal}
@@ -246,15 +369,16 @@ export default function RideSelectionScreen({ navigation }: any) {
          </Modal>
 
          <Button 
-            title={pickup && dropoff ? `Confirm ${activeTier.name}` : 'Select Coordinates'} 
+            title={pickupData && dropoffData ? `Confirm ${activeTier.name}` : 'Select Coordinates'} 
             onPress={handleBooking}
             loading={isBooking}
             variant="primary"
             size="xl"
             fullWidth
-            disabled={!pickup || !dropoff}
+            disabled={!pickupData || !dropoffData}
             icon={<Ionicons name="shield-checkmark" size={20} color={COLORS.white} />}
          />
+
       </Animated.View>
     </View>
   );
@@ -328,8 +452,22 @@ const styles = StyleSheet.create({
   inputDivider: {
     height: 1,
     backgroundColor: 'rgba(0,0,0,0.05)',
-    marginVertical: 12,
+    marginVertical: 4,
   },
+  locationInput: {
+    height: 40,
+    justifyContent: 'center',
+  },
+  locationText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f1419',
+  },
+  placeholderText: {
+    color: 'rgba(0,0,0,0.3)',
+    fontWeight: '500',
+  },
+
   controlPanel: {
     flex: 1,
     marginTop: -32,
@@ -471,5 +609,35 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 20,
+  },
+  rideVoucherRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    height: 56,
+    paddingLeft: 16,
+    paddingRight: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  rideVoucherInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f1419',
+  },
+  rideApplyBtn: {
+    backgroundColor: '#0f1419',
+    paddingHorizontal: 20,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rideApplyBtnText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '900',
   },
 });

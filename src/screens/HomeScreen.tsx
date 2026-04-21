@@ -12,6 +12,8 @@ import {
   Animated,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
@@ -32,7 +34,9 @@ const superServices = [
 ];
 
 export default function HomeScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
+
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [merchants, setMerchants] = useState<any[]>([]);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -85,16 +89,18 @@ export default function HomeScreen({ navigation }: any) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 20 }]}
         bounces={false}
       >
         {/* Header & Greeting */}
         <View style={styles.header}>
+
           <View style={styles.headerTop}>
-            <View>
+            <View style={{ flex: 1, marginRight: 16 }}>
               <Text style={styles.greetingText}>What can we fetch for you,</Text>
-              <Text style={styles.userName}>{user?.name || 'Guest'}?</Text>
+              <Text style={styles.userName} numberOfLines={1}>{user?.name || 'Guest'}?</Text>
             </View>
+
             <View style={styles.headerRight}>
               <TouchableOpacity style={styles.notiBtn} onPress={() => navigation.navigate('Notifications')}>
                 <Ionicons name="notifications-outline" size={24} color={COLORS.onSurface} />
@@ -271,7 +277,7 @@ export default function HomeScreen({ navigation }: any) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.activityTitle}>{(order.serviceType || 'Fetch').toUpperCase()} SUCCESSFUL</Text>
-                    <Text style={styles.activityDate}>Completed • {new Date(typeof order.createdAt === 'string' ? order.createdAt : (order.createdAt.seconds * 1000)).toLocaleDateString()}</Text>
+                    <Text style={styles.activityDate}>Completed • {order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000).toLocaleDateString() : 'Just now'}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.2)" />
                 </TouchableOpacity>
@@ -291,13 +297,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
   scrollContent: {
-    paddingTop: 60,
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
   header: {
     paddingHorizontal: 24,
     marginBottom: 32,
   },
+
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',

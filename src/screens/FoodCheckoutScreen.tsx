@@ -17,9 +17,10 @@ import { COLORS, SHADOWS, RADIUS } from '../constants/theme';
 import { Restaurant, MenuItem, Order } from '../types';
 import { createOrder, PaymentMethod } from '../services/orderService';
 import { useAuth } from '../context/AuthContext';
-import BarangaySelector from '../components/ui/BarangaySelector';
 import Button from '../components/ui/Button';
 import PaymentMethodSelector from '../components/ui/PaymentMethodSelector';
+import Input from '../components/ui/Input';
+import { db } from '../config/firebase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,21 +28,65 @@ export default function FoodCheckoutScreen({ navigation, route }: any) {
   const { restaurant, cart, total } = route.params;
   const { user } = useAuth();
   
-  const [dropoff, setDropoff] = useState('');
+  const [dropoffData, setDropoffData] = useState<any>(null);
+
   const [notes, setNotes] = useState('');
   const [tip, setTip] = useState(20);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cash');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Voucher Engine State
+  const [voucherCode, setVoucherCode] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [isValidating, setIsValidating] = useState(false);
 
   const deliveryFee = restaurant.deliveryFee || 35;
-  const grandTotal = total + deliveryFee + tip;
+  const grandTotal = Math.max(0, (total + deliveryFee + tip) - discountAmount);
+
+
+  const handleApplyVoucher = async () => {
+    if (!voucherCode.trim()) return;
+    setIsValidating(true);
+    try {
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const q = query(collection(db, 'vouchers'), where('code', '==', voucherCode.toUpperCase()), where('isActive', '==', true));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        Alert.alert('Invalid Code', 'This protocol does not exist or has expired.');
+        setAppliedVoucher(null);
+        setDiscountAmount(0);
+        return;
+      }
+
+      const v = snap.docs[0].data();
+      let disc = 0;
+      if (v.type === 'fixed') {
+        disc = v.value;
+      } else {
+        disc = total * (v.value / 100);
+      }
+
+      setAppliedVoucher(v);
+      setDiscountAmount(disc);
+      Alert.alert('Voucher Applied', `Savings of ₱${disc.toFixed(2)} synchronized.`);
+      
+    } catch (e) {
+      Alert.alert('System Error', 'Could not validate promo protocol.');
+    } finally {
+      setIsValidating(false);
+    }
+  };
 
   const handlePlaceOrder = async () => {
-    if (!dropoff) {
-      Alert.alert('Delivery Point Required', 'Please select your barangay for delivery.');
+
+    if (!dropoffData) {
+      Alert.alert('Delivery Point Required', 'Please select your precise delivery point on the map.');
       return;
     }
+
 
     setIsSubmitting(true);
     try {
@@ -54,10 +99,12 @@ export default function FoodCheckoutScreen({ navigation, route }: any) {
         restaurantId: restaurant.id,
         restaurantName: restaurant.name,
         pickupLocation: restaurant.name,
-        dropoffLocation: `${dropoff}, Butuan City`,
+        dropoffLocation: dropoffData.address,
+        dropoffCoords: { latitude: dropoffData.latitude, longitude: dropoffData.longitude },
         price: grandTotal,
         paymentMethod: selectedPayment,
         paymentStatus: selectedPayment === 'cash' ? 'pending' : 'paid',
+
         itemDetails: orderItems,
         customerCity: user?.location?.city || 'Butuan',
         customerProvince: user?.location?.province || 'Agusan del Norte',
@@ -111,18 +158,27 @@ export default function FoodCheckoutScreen({ navigation, route }: any) {
         <View style={[styles.cardHeader, { marginTop: 32 }]}>
            <Text style={styles.sectionTitle}>DELIVERY DESTINATION</Text>
         </View>
-        <View style={styles.destinationCard}>
-           <BarangaySelector 
-             value={dropoff}
-             onSelect={setDropoff}
-             label="SELECT BARANGAY"
-             placeholder="Where should we deliver?"
-           />
-           <View style={styles.instructionBox}>
-              <Ionicons name="chatbox" size={16} color="rgba(0,0,0,0.2)" />
-              <Text style={styles.instructionText}>Riders will follow this location in Butuan.</Text>
+         <TouchableOpacity 
+           style={styles.destinationCard}
+           onPress={() => navigation.navigate('LocationPicker', {
+             title: 'Delivery Destination',
+             onLocationSelect: (data: any) => setDropoffData(data)
+           })}
+         >
+           <Text style={styles.sectionTitle}>PICKUP & DROP-OFF</Text>
+           <View style={{ marginTop: 8 }}>
+             <Text style={{ fontSize: 13, fontWeight: '800', color: COLORS.onSurface }}>{restaurant.name}</Text>
+             <Ionicons name="arrow-down" size={12} color="rgba(0,0,0,0.1)" style={{ marginVertical: 2, marginLeft: 2 }} />
+             <Text style={{ fontSize: 14, fontWeight: '800', color: dropoffData ? COLORS.primary : 'rgba(0,0,0,0.2)' }} numberOfLines={1}>
+                {dropoffData ? dropoffData.address : 'Tap to pin delivery location...'}
+             </Text>
            </View>
-        </View>
+           <View style={styles.instructionBox}>
+              <Ionicons name="map-outline" size={16} color={COLORS.primary} />
+              <Text style={styles.instructionText}>Precision coordinate tracking enabled.</Text>
+           </View>
+         </TouchableOpacity>
+
 
         {/* PAYMENT & FEES */}
         <View style={[styles.cardHeader, { marginTop: 32 }]}>
@@ -174,11 +230,51 @@ export default function FoodCheckoutScreen({ navigation, route }: any) {
               <Ionicons name="chevron-forward" size={16} color="rgba(0,0,0,0.2)" />
            </TouchableOpacity>
 
+           {/* Voucher Console HUD */}
+           <View style={styles.voucherSection}>
+              <View style={styles.voucherInputRow}>
+                 <Ionicons name="ticket-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+                 <View style={{ flex: 1 }}>
+                   <Input 
+                     placeholder="PROMO CODE" 
+                     value={voucherCode} 
+                     onChangeText={setVoucherCode}
+                     autoCapitalize="characters"
+                     variant="plain"
+                     style={{ height: 40, marginVertical: 0 }}
+                   />
+                 </View>
+                 <TouchableOpacity 
+                   style={[styles.applyBtn, !voucherCode && { opacity: 0.5 }]} 
+                   onPress={handleApplyVoucher}
+                   disabled={isValidating || !voucherCode}
+                 >
+                   <Text style={styles.applyBtnText}>{isValidating ? '...' : 'APPLY'}</Text>
+                 </TouchableOpacity>
+              </View>
+              {appliedVoucher && (
+                <View style={styles.appliedBadge}>
+                   <Ionicons name="checkmark-seal" size={14} color="#10b981" />
+                   <Text style={styles.appliedText} numberOfLines={1}>
+                      {appliedVoucher.code} ACTIVATED: -₱{discountAmount.toFixed(2)}
+                   </Text>
+                   <TouchableOpacity onPress={() => { setAppliedVoucher(null); setDiscountAmount(0); setVoucherCode(''); }}>
+                     <Ionicons name="close-circle" size={16} color="rgba(0,0,0,0.3)" />
+                   </TouchableOpacity>
+                </View>
+              )}
+           </View>
+
            <View style={styles.grandTotalBox}>
+              {discountAmount > 0 && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 8, paddingHorizontal: 4 }}>
+                   <Text style={{ fontSize: 13, fontWeight: '700', color: '#10b981' }}>Promo Discount</Text>
+                   <Text style={{ fontSize: 13, fontWeight: '900', color: '#10b981' }}>-₱{discountAmount.toFixed(2)}</Text>
+                </View>
+              )}
               <Text style={styles.grandLabel}>GRAND TOTAL</Text>
               <Text style={styles.grandVal}>₱{grandTotal.toFixed(2)}</Text>
            </View>
-
         </View>
 
         <Button 
@@ -488,5 +584,52 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 20,
+  },
+  voucherSection: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 20,
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#F1F3F5',
+  },
+  voucherInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    paddingLeft: 12,
+    paddingRight: 6,
+    height: 52,
+    ...SHADOWS.xs,
+  },
+  applyBtn: {
+    backgroundColor: COLORS.onSurface,
+    paddingHorizontal: 16,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  applyBtnText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  appliedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 12,
+    gap: 8,
+  },
+  appliedText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#10b981',
   },
 });

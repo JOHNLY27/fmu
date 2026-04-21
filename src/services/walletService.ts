@@ -151,3 +151,65 @@ export const addTransaction = async (userId: string, amount: number, type: 'cred
   
   await addDoc(collection(db, 'transactions'), txData);
 };
+export const payRiderForMission = async (orderId: string, customerId: string, riderId: string, amount: number) => {
+  await runTransaction(db, async (transaction) => {
+    const customerRef = doc(db, 'wallets', customerId);
+    const riderRef = doc(db, 'wallets', riderId);
+    const orderRef = doc(db, 'orders', orderId);
+    
+    const customerSnap = await transaction.get(customerRef);
+    const riderSnap = await transaction.get(riderRef);
+    const orderSnap = await transaction.get(orderRef);
+
+    if (!orderSnap.exists()) throw new Error("Order not found.");
+    if (orderSnap.data().status === 'completed') throw new Error("Order already paid.");
+    
+    const customerBalance = customerSnap.exists() ? customerSnap.data().balance : 0;
+    const riderBalance = riderSnap.exists() ? riderSnap.data().balance : 0;
+    
+    if (customerBalance < amount) throw new Error("Insufficient wallet balance.");
+    
+    // 1. Deduct from Customer
+    transaction.update(customerRef, { 
+      balance: customerBalance - amount, 
+      lastUpdated: new Date().toISOString() 
+    });
+    
+    // 2. Credit to Rider
+    if (riderSnap.exists()) {
+      transaction.update(riderRef, { 
+        balance: riderBalance + amount, 
+        lastUpdated: new Date().toISOString() 
+      });
+    } else {
+      transaction.set(riderRef, { 
+        balance: amount, 
+        lastUpdated: new Date().toISOString() 
+      });
+    }
+    
+    // 3. Update Order Status
+    transaction.update(orderRef, { 
+      status: 'completed',
+      paymentStatus: 'paid' 
+    });
+    
+    // 4. Record Transactions
+    const txCol = collection(db, 'transactions');
+    transaction.set(doc(txCol), {
+      userId: customerId,
+      amount,
+      type: 'debit',
+      description: `Payment for Mission #${orderId.substring(0,6).toUpperCase()}`,
+      createdAt: new Date().toISOString()
+    });
+    
+    transaction.set(doc(txCol), {
+      userId: riderId,
+      amount,
+      type: 'credit',
+      description: `Earning from Mission #${orderId.substring(0,6).toUpperCase()}`,
+      createdAt: new Date().toISOString()
+    });
+  });
+};
