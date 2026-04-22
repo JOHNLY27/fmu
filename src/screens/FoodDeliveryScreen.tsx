@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   Dimensions,
   StatusBar,
   Animated,
@@ -17,6 +16,9 @@ import { COLORS, SHADOWS, RADIUS } from '../constants/theme';
 import { FOOD_CATEGORIES } from '../constants/butuanRestaurants';
 import { db } from '../config/firebase';
 import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import Skeleton from '../components/ui/Skeleton';
+import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 
 const { width } = Dimensions.get('window');
 
@@ -91,6 +93,9 @@ export default function FoodDeliveryScreen({ navigation }: any) {
               <Image 
                  source={{ uri: 'https://images.unsplash.com/photo-1513639776629-7b61b0ac49cb?w=400' }} 
                  style={styles.promoImg} 
+                 contentFit="cover"
+                 transition={500}
+                 placeholder="LHF~Hn00D$aJ%NM{RjWB.8D%t7t7"
               />
            </LinearGradient>
         </View>
@@ -101,20 +106,43 @@ export default function FoodDeliveryScreen({ navigation }: any) {
               {activeCategory === 'All' ? 'EXPLORE CUISINES' : `${activeCategory.toUpperCase()}`}
            </Text>
            {activeCategory !== 'All' && (
-             <TouchableOpacity onPress={() => setActiveCategory('All')}>
+             <TouchableOpacity onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setActiveCategory('All');
+             }}>
                 <Text style={styles.viewAllText}>View All</Text>
              </TouchableOpacity>
            )}
         </View>
 
-        {activeCategory === 'All' ? (
+        {loading ? (
+          <View style={{ marginTop: 10 }}>
+            {[1, 2].map((_, i) => (
+              <View key={i} style={styles.restCard}>
+                <Skeleton width="100%" height={160} borderRadius={0} />
+                <View style={styles.restDetails}>
+                  <View style={styles.restMainRow}>
+                    <Skeleton width="50%" height={18} />
+                    <Skeleton width={30} height={12} />
+                  </View>
+                  <View style={{ marginTop: 4 }}>
+                     <Skeleton width="30%" height={12} />
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : activeCategory === 'All' ? (
           /* Cuisine Selector Matrix */
           <View style={styles.catMatrix}>
              {FOOD_CATEGORIES.map((cat, i) => (
                 <TouchableOpacity 
                   key={i} 
                   style={styles.matrixCard}
-                  onPress={() => setActiveCategory(cat.label)}
+                  onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setActiveCategory(cat.label);
+                   }}
                   activeOpacity={0.8}
                 >
                    <View style={styles.matrixIconBox}>
@@ -135,7 +163,13 @@ export default function FoodDeliveryScreen({ navigation }: any) {
                  activeOpacity={0.9}
                >
                   <View style={styles.restImgBox}>
-                     <Image source={{ uri: rest.image }} style={styles.restImg} />
+                      <Image 
+                        source={{ uri: rest.image }} 
+                        style={styles.restImg} 
+                        contentFit="cover"
+                        transition={500}
+                        placeholder="LHF~Hn00D$aJ%NM{RjWB.8D%t7t7"
+                      />
                      <View style={styles.restOverlay}>
                         <View style={styles.timeBadge}>
                            <Ionicons name="time" size={10} color={COLORS.white} />

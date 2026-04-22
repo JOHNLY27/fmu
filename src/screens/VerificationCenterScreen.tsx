@@ -7,20 +7,22 @@ import {
   TouchableOpacity,
   Alert,
   StatusBar,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { COLORS, SHADOWS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../config/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImage } from '../services/storageService';
+import { useToast } from '../context/ToastContext';
 import Button from '../components/ui/Button';
 
 export default function VerificationCenterScreen({ navigation }: any) {
   const { user } = useAuth();
   const [loading, setLoading] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   // Requirements status from user data
   const requirements = user?.requirements || {};
@@ -50,9 +52,17 @@ export default function VerificationCenterScreen({ navigation }: any) {
           updatedAt: new Date().toISOString()
         });
         
-        Alert.alert('Document Received', 'Our compliance team will verify this document within 24 hours.');
+        showToast({
+          title: 'Document Received',
+          message: 'Our compliance team will verify this document within 24 hours.',
+          type: 'success'
+        });
       } catch (e: any) {
-        Alert.alert('Upload Failed', e.message);
+        showToast({
+          title: 'Upload Failed',
+          message: e.message || 'An error occurred during upload.',
+          type: 'error'
+        });
       } finally {
         setLoading(null);
       }
@@ -82,7 +92,12 @@ export default function VerificationCenterScreen({ navigation }: any) {
 
          {docUrl ? (
            <View style={styles.previewContainer}>
-              <Image source={{ uri: docUrl }} style={styles.previewImg} />
+              <Image 
+                source={{ uri: docUrl }} 
+                style={styles.previewImg} 
+                contentFit="cover"
+                transition={500}
+              />
               {status !== 'approved' && (
                 <TouchableOpacity style={styles.replaceBtn} onPress={() => handleUpload(docType)}>
                   <Text style={styles.replaceText}>REPLACE</Text>

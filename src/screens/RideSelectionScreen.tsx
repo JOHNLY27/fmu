@@ -10,6 +10,7 @@ import {
   StatusBar,
   Animated,
   Platform,
+  TextInput,
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -45,6 +46,7 @@ export default function RideSelectionScreen({ navigation }: any) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isValidating, setIsValidating] = useState(false);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [isBooking, setIsBooking] = useState(false);
 
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -126,6 +128,7 @@ export default function RideSelectionScreen({ navigation }: any) {
   };
 
   const handleBooking = async () => {
+    setIsBooking(true);
     try {
       const orderId = await createOrder({
         userId: user.uid,

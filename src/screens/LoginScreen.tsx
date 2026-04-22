@@ -7,12 +7,10 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
   Animated,
   Dimensions,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
@@ -20,6 +18,8 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { useAuth } from '../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
+import { useToast } from '../context/ToastContext';
 
 const { width } = Dimensions.get('window');
 
@@ -34,6 +34,7 @@ export default function LoginScreen({ navigation }: any) {
   const [barangay, setBarangay] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const { signIn, signUp } = useAuth();
+  const { showToast } = useToast();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -63,7 +64,11 @@ export default function LoginScreen({ navigation }: any) {
     const cleanEmail = email.trim().toLowerCase();
     
     if (!cleanEmail || !password) {
-      Alert.alert('Error', 'Please fill in all fields with a valid email.');
+      showToast({
+        title: 'Missing Info',
+        message: 'Please fill in all fields with a valid email.',
+        type: 'warning'
+      });
       return;
     }
     setLoading(true);
@@ -78,7 +83,11 @@ export default function LoginScreen({ navigation }: any) {
         }
       } else {
         if (!name || !province || !city) {
-          Alert.alert('Error', 'Please provide your name, province, and city.');
+          showToast({
+            title: 'Incomplete Profile',
+            message: 'Please provide your name, province, and city.',
+            type: 'warning'
+          });
           setLoading(false);
           return;
         }
@@ -90,7 +99,11 @@ export default function LoginScreen({ navigation }: any) {
         });
       }
     } catch (error: any) {
-      Alert.alert('Auth Error', error.message || 'An error occurred');
+      showToast({
+        title: 'Authentication Failed',
+        message: error.message || 'An error occurred',
+        type: 'error'
+      });
     }
     setLoading(false);
   };
@@ -99,11 +112,12 @@ export default function LoginScreen({ navigation }: any) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
-      <ScrollView
+      <KeyboardAwareScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
-        bounces={false}
+        enableOnAndroid={true}
+        extraScrollHeight={20}
       >
         {/* Header Hero */}
         <View style={styles.heroSection}>
@@ -134,13 +148,19 @@ export default function LoginScreen({ navigation }: any) {
           <View style={styles.tabContainer}>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'login' && styles.activeTab]}
-              onPress={() => setActiveTab('login')}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setActiveTab('login');
+              }}
             >
               <Text style={[styles.tabText, activeTab === 'login' && styles.activeTabText]}>Sign In</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'signup' && styles.activeTab]}
-              onPress={() => setActiveTab('signup')}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setActiveTab('signup');
+              }}
             >
               <Text style={[styles.tabText, activeTab === 'signup' && styles.activeTabText]}>Create Account</Text>
             </TouchableOpacity>
@@ -269,7 +289,7 @@ export default function LoginScreen({ navigation }: any) {
             By continuing, you agree to our <Text style={styles.legalLink}>Terms of Service</Text> and <Text style={styles.legalLink}>Privacy Policy</Text>.
           </Text>
         </Animated.View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

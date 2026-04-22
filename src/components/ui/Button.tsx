@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   TouchableOpacity,
   Text,
@@ -6,9 +6,13 @@ import {
   ViewStyle,
   TextStyle,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { COLORS, RADIUS, SPACING, FONTS, SHADOWS } from '../../constants/theme';
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 interface ButtonProps {
   title: string;
@@ -35,6 +39,29 @@ export default function Button({
   textStyle,
   fullWidth = false,
 }: ButtonProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    if (!isDisabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 8,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 8,
+    }).start();
+  };
+
   const sizeStyles: Record<string, { paddingH: number; paddingV: number; fontSize: number }> = {
     sm: { paddingH: 16, paddingV: 10, fontSize: 11 },
     md: { paddingH: 24, paddingV: 14, fontSize: 14 },
@@ -47,11 +74,13 @@ export default function Button({
 
   if (variant === 'primary') {
     return (
-      <TouchableOpacity
+      <AnimatedTouchable
         onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         disabled={isDisabled}
         activeOpacity={0.85}
-        style={[fullWidth && { width: '100%' }, style]}
+        style={[fullWidth && { width: '100%' }, { transform: [{ scale: scaleAnim }] }, style]}
       >
         <LinearGradient
           colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
@@ -78,7 +107,7 @@ export default function Button({
             </>
           )}
         </LinearGradient>
-      </TouchableOpacity>
+      </AnimatedTouchable>
     );
   }
 
@@ -101,8 +130,10 @@ export default function Button({
   const v = variantStyles[variant];
 
   return (
-    <TouchableOpacity
+    <AnimatedTouchable
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       disabled={isDisabled}
       activeOpacity={0.85}
       style={[
@@ -114,6 +145,7 @@ export default function Button({
           opacity: isDisabled ? 0.5 : 1,
           borderWidth: v.border ? 2 : 0,
           borderColor: v.border,
+          transform: [{ scale: scaleAnim }],
         },
         fullWidth && { width: '100%' },
         SHADOWS.sm,
@@ -130,7 +162,7 @@ export default function Button({
           {icon}
         </>
       )}
-    </TouchableOpacity>
+    </AnimatedTouchable>
   );
 }
 

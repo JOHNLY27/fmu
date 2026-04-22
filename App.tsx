@@ -6,6 +6,7 @@ import { LogBox, View, StyleSheet } from 'react-native';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import IntroScreen from './src/components/IntroScreen';
+import { ToastProvider } from './src/context/ToastContext';
 import * as SplashScreen from 'expo-splash-screen';
 
 // Keep the native splash visible during early boot
@@ -40,16 +41,17 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="dark" />
-          
-          <View style={styles.content}>
-            <AppNavigator />
+          <ToastProvider>
+            <StatusBar style="dark" />
             
-            {showIntro && (
-              <IntroScreen onFinish={() => setShowIntro(false)} />
-            )}
-          </View>
-
+            <View style={styles.content}>
+              <AppNavigator />
+              
+              {showIntro && (
+                <IntroScreen onFinish={() => setShowIntro(false)} />
+              )}
+            </View>
+          </ToastProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

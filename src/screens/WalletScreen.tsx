@@ -10,11 +10,11 @@ import {
   Animated,
   Alert,
   Modal,
-  Image,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { COLORS, SHADOWS, RADIUS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -185,7 +185,12 @@ export default function WalletScreen({ navigation }: any) {
                   <Ionicons name="qr-code" size={200} color={COLORS.onSurface} />
                   <View style={styles.qrAvatarBox}>
                     {user?.photoURL ? (
-                      <Image source={{ uri: user.photoURL }} style={styles.qrAvatar} />
+                      <Image 
+                        source={{ uri: user.photoURL }} 
+                        style={styles.qrAvatar} 
+                        contentFit="cover"
+                        transition={300}
+                      />
                     ) : (
                       <Text style={styles.qrAvatarLetter}>{user?.name?.charAt(0).toUpperCase()}</Text>
                     )}

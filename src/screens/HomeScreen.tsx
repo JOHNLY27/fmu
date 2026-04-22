@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   TextInput,
   ScrollView,
   TouchableOpacity,
@@ -23,6 +22,7 @@ import { subscribeToUserOrders, Order } from '../services/orderService';
 import { db } from '../config/firebase';
 import { collection, onSnapshot, query, orderBy, limit, where } from 'firebase/firestore';
 import { subscribeToWallet } from '../services/walletService';
+import { Image } from 'expo-image';
 
 const { width } = Dimensions.get('window');
 
@@ -109,7 +109,12 @@ export default function HomeScreen({ navigation }: any) {
               <TouchableOpacity style={styles.profileBtn} onPress={() => navigation.navigate('Account')}>
                 <View style={styles.avatar}>
                   {user?.photoURL ? (
-                    <Image source={{ uri: user.photoURL }} style={styles.avatarImg} />
+                    <Image 
+                      source={{ uri: user.photoURL }} 
+                      style={styles.avatarImg} 
+                      contentFit="cover"
+                      transition={300}
+                    />
                   ) : (
                     <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'U'}</Text>
                   )}
@@ -182,6 +187,9 @@ export default function HomeScreen({ navigation }: any) {
               <Image
                 source={{ uri: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&fit=crop' }}
                 style={styles.promoImage}
+                contentFit="cover"
+                transition={1000}
+                placeholder="LHF~Hn00D$aJ%NM{RjWB.8D%t7t7"
               />
               <LinearGradient colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.8)']} style={styles.promoOverlay} />
               <View style={styles.promoContent}>
@@ -233,7 +241,9 @@ export default function HomeScreen({ navigation }: any) {
                       <Image 
                         source={{ uri: store.image }} 
                         style={styles.storeImg} 
-                        resizeMode="cover"
+                        contentFit="cover"
+                        transition={500}
+                        placeholder="LHF~Hn00D$aJ%NM{RjWB.8D%t7t7"
                       />
                     ) : (
                       <Ionicons name="storefront" size={32} color={COLORS.primary} style={{ opacity: 0.2 }} />

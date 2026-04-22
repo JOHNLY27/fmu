@@ -5,14 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Dimensions,
-  Image,
   StatusBar,
+  Switch,
+  Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +22,7 @@ import BarangaySelector from '../components/ui/BarangaySelector';
 
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImage } from '../services/storageService';
+import { useToast } from '../context/ToastContext';
 
 export default function ProfileEditScreen({ navigation }: any) {
   const { user } = useAuth();
@@ -33,11 +32,16 @@ export default function ProfileEditScreen({ navigation }: any) {
   const [image, setImage] = useState<string | null>(user?.photoURL || null);
   const [notifs, setNotifs] = useState(true);
   const [loading, setLoading] = useState(false);
+  const { showToast } = useToast();
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need camera roll access to personalize your profile.');
+      showToast({
+        title: 'Action Blocked',
+        message: 'Camera roll access needed to personalize your profile.',
+        type: 'warning'
+      });
       return;
     }
 
@@ -55,7 +59,11 @@ export default function ProfileEditScreen({ navigation }: any) {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Full name is required for mission verification.');
+      showToast({
+        title: 'Validation Error',
+        message: 'Full name is required for mission verification.',
+        type: 'warning'
+      });
       return;
     }
     setLoading(true);
@@ -86,11 +94,19 @@ export default function ProfileEditScreen({ navigation }: any) {
         });
       }
 
-      Alert.alert('Success', 'Your identity profile has been updated.');
+      showToast({
+        title: 'Update Successful',
+        message: 'Your identity profile has been updated.',
+        type: 'success'
+      });
 
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Update Failed', e.message);
+      showToast({
+        title: 'Update Failed',
+        message: e.message || 'An error occurred during sync.',
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -106,15 +122,25 @@ export default function ProfileEditScreen({ navigation }: any) {
         <Text style={styles.headerTitle}>Personalization</Text>
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <KeyboardAwareScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        enableOnAndroid={true}
+        extraScrollHeight={50}
+        keyboardShouldPersistTaps="handled"
+      >
           
           {/* Avatar Hub */}
           <View style={styles.avatarHub}>
-             <TouchableOpacity style={styles.avatarCircle} onPress={pickImage} activeOpacity={0.8}>
-                {image ? (
-                  <Image source={{ uri: image }} style={styles.avatarImg} />
-                ) : (
+              <TouchableOpacity style={styles.avatarCircle} onPress={pickImage} activeOpacity={0.8}>
+                 {image ? (
+                   <Image 
+                     source={{ uri: image }} 
+                     style={styles.avatarImg} 
+                     contentFit="cover"
+                     transition={300}
+                   />
+                 ) : (
                   <View style={styles.avatarPlaceholder}>
                     <Text style={styles.placeholderChar}>{name.charAt(0).toUpperCase() || '?'}</Text>
                   </View>
@@ -195,9 +221,7 @@ export default function ProfileEditScreen({ navigation }: any) {
               fullWidth
             />
           </View>
-
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
     </View>
   );
 }

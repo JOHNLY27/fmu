@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   ScrollView,
   TextInput,
   TouchableOpacity,
@@ -18,6 +17,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import { STORE_CATEGORIES } from '../constants/butuanStores';
 import { subscribeToActiveMerchants, Merchant } from '../services/merchantService';
+import Skeleton from '../components/ui/Skeleton';
+import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 
 const { width } = Dimensions.get('window');
 
@@ -126,6 +128,9 @@ export default function StoreDirectoryScreen({ navigation }: any) {
             <Image 
                source={{ uri: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800' }} 
                style={styles.heroImg} 
+               contentFit="cover"
+               transition={500}
+               placeholder="LHF~Hn00D$aJ%NM{RjWB.8D%t7t7"
             />
             <LinearGradient colors={['transparent', 'rgba(15,20,25,0.85)']} style={styles.heroOverlay} />
             <View style={styles.heroContent}>
@@ -141,7 +146,10 @@ export default function StoreDirectoryScreen({ navigation }: any) {
                <TouchableOpacity 
                   key={i} 
                   style={[styles.catChip, activeCategory === cat.label && styles.activeCatChip]}
-                  onPress={() => setActiveCategory(cat.label)}
+                  onPress={() => {
+                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                     setActiveCategory(cat.label);
+                  }}
                >
                   <Text style={styles.catEmoji}>{cat.emoji}</Text>
                   <Text style={[styles.catLabel, activeCategory === cat.label && styles.activeCatLabel]}>{cat.label}</Text>
@@ -156,16 +164,29 @@ export default function StoreDirectoryScreen({ navigation }: any) {
                {activeCategory === 'All' ? 'BROWSE BY CATEGORY' : `${activeCategory.toUpperCase()} VENDORS`}
             </Text>
             {activeCategory !== 'All' && (
-              <TouchableOpacity onPress={() => setActiveCategory('All')}>
+              <TouchableOpacity onPress={() => {
+                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                 setActiveCategory('All');
+              }}>
                  <Text style={styles.clearBtn}>View All</Text>
               </TouchableOpacity>
             )}
          </View>
 
          {loading ? (
-           <View style={{ paddingVertical: 40 }}>
-             <ActivityIndicator size="large" color={COLORS.primary} />
-             <Text style={{ textAlign: 'center', marginTop: 12, color: 'rgba(0,0,0,0.3)', fontWeight: '700' }}>SEARCHING MARKETPLACE...</Text>
+           <View style={{ marginTop: 10 }}>
+             {[1, 2, 3].map((_, i) => (
+               <View key={i} style={styles.storeCard}>
+                 <Skeleton width="100%" height={140} borderRadius={0} />
+                 <View style={styles.storeDetails}>
+                   <View style={{ flex: 1, gap: 8 }}>
+                     <Skeleton width="60%" height={16} />
+                     <Skeleton width="40%" height={12} />
+                   </View>
+                   <Skeleton width={32} height={32} borderRadius={16} />
+                 </View>
+               </View>
+             ))}
            </View>
          ) : (
            <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -176,7 +197,10 @@ export default function StoreDirectoryScreen({ navigation }: any) {
                       <TouchableOpacity 
                          key={i} 
                          style={styles.matrixCard}
-                         onPress={() => setActiveCategory(cat.label)}
+                         onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setActiveCategory(cat.label);
+                         }}
                          activeOpacity={0.8}
                       >
                          <View style={styles.matrixIconBox}>
@@ -206,6 +230,9 @@ export default function StoreDirectoryScreen({ navigation }: any) {
                               <Image 
                                  source={{ uri: store.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500' }} 
                                  style={styles.storeImg} 
+                                 contentFit="cover"
+                                 transition={500}
+                                 placeholder="LHF~Hn00D$aJ%NM{RjWB.8D%t7t7"
                               />
                               <View style={styles.cardHeader}>
                                  <View style={styles.ratingBox}>

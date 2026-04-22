@@ -6,8 +6,8 @@ import Animated, {
   withTiming, 
   withRepeat, 
   withSequence,
+  runOnJS,
   Easing,
-  runOnJS
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -37,8 +37,8 @@ export default function IntroScreen({ onFinish }: IntroScreenProps) {
     setTimeout(() => {
       logoScale.value = withRepeat(
         withSequence(
-          withTiming(1.05, { duration: 2000, easing: Easing.inOut(Easing.sine) }),
-          withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sine) })
+          withTiming(1.05, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
+          withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sin) })
         ),
         -1,
         true
